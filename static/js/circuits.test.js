@@ -38,7 +38,7 @@ const cycleFour = [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4,
 const sandwichCycles = [
     1, 2, 3,
     1, 2, 3, // cycle 1
-    4, 5, 6, // 2, 3, 4
+    4, 5, 6, // 2, 3, 4 
     7, 8, 9, // 5, 6, 7
     10, 11, 12,  // 8, 9, 10
     1, // 11
@@ -336,6 +336,30 @@ const fullExerciseExample = [{
 
 
 
+    function testAppendSetToCircuit() {
+        let workout = cycleThree.slice(); // copy cycle 3!
+        workout = window.appendSetToCircuit(workout, 0);
+        let parsed = window.workoutToCircuits(workout);
+        assertEqual(parsed.length, 3, 'appendSetToCircuit - number of circuits unchanged');
+        assertEqual(parsed[0].exercises.length, 3, 'appendSetToCircuit - circuit 1 cycle length unchanged');
+        for (let i = 0; i < parsed[0].exercises.length; i++) {
+            assertEqual(parsed[0].exercises[i].length, 4, `appendSetToCircuit - circuit 1 item ${i} has 4 rounds`);
+        }
+        assertEqual(parsed[1].exercises[0].length, 3, 'appendSetToCircuit - circuit 2 round count unchanged');
+    }
+
+    function testDeleteExerciseFromCircuit() {
+        let workout = cycleThree.slice(); // copy cycle 3!
+        workout = window.deleteExerciseFromCircuit(workout, 0, 1); // remove B from first circuit
+        let parsed = window.workoutToCircuits(workout);
+        assertEqual(parsed.length, 3, 'deleteExerciseFromCircuit - number of circuits unchanged');
+        assertEqual(parsed[0].exercises.length, 2, 'deleteExerciseFromCircuit - circuit 1 cycle length reduced');
+        assertEqual(parsed[0].exercises[0].length, 3, 'deleteExerciseFromCircuit - circuit 1 round count unchanged');
+        assertEqual(parsed[0].exercises[0][0].groupId, 'A', 'deleteExerciseFromCircuit - first exercise is A');
+        assertEqual(parsed[0].exercises[1][0].groupId, 'C', 'deleteExerciseFromCircuit - second exercise is C');
+        assertEqual(parsed[1].exercises.length, 3, 'deleteExerciseFromCircuit - circuit 2 unchanged');
+    }
+
     function runCircuitTests() {
         const results = [];
         const tests = [
@@ -344,6 +368,8 @@ const fullExerciseExample = [{
             { name: 'testCircuitDeletion', fn: testCircuitDeletion },
             { name: 'testMoveCircuits', fn: testMoveCircuits },
             { name: 'testCircuitReordering', fn: testCircuitReordering },
+            { name: 'testAppendSetToCircuit', fn: testAppendSetToCircuit },
+            { name: 'testDeleteExerciseFromCircuit', fn: testDeleteExerciseFromCircuit },
         ];
         tests.forEach(test => {
             try {
