@@ -14,11 +14,17 @@ class SpeedianceClient:
         self.host = "euapi.speediance.com" if self.region == "EU" else "api2.speediance.com"
         self.library_cache_file = self._get_library_cache_file()
         self.library_cache = self._load_library_cache()
+        self.exercise_detail_cache_file = self._get_exercise_detail_cache_file()
+        self.exercise_detail_cache = self._load_exercise_detail_cache()
         self.last_debug_info = {}
 
     def _get_library_cache_file(self):
         allow_flag = 1 if self.allow_monster_moves else 0
         return f"library_cache_v2_device{self.device_type}_allow{allow_flag}.json"
+
+    def _get_exercise_detail_cache_file(self):
+        allow_flag = 1 if self.allow_monster_moves else 0
+        return f"exercise_detail_cache_device{self.device_type}_allow{allow_flag}.json"
 
     def _load_library_cache(self):
         """Loads library from disk if available."""
@@ -37,6 +43,24 @@ class SpeedianceClient:
                 json.dump(data, f, ensure_ascii=False)
         except Exception as e:
             print(f"Error saving library cache: {e}")
+
+    def _load_exercise_detail_cache(self):
+        """Loads exercise details from disk if available."""
+        if os.path.exists(self.exercise_detail_cache_file):
+            try:
+                with open(self.exercise_detail_cache_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error loading exercise detail cache: {e}")
+        return {}
+
+    def _save_exercise_detail_cache(self):
+        """Saves exercise details to disk."""
+        try:
+            with open(self.exercise_detail_cache_file, 'w', encoding='utf-8') as f:
+                json.dump(self.exercise_detail_cache, f, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving exercise detail cache: {e}")
 
     def _request(self, method, url, **kwargs):
         """Wrapper for requests to capture debug info."""
@@ -104,6 +128,8 @@ class SpeedianceClient:
         self.base_url = "https://" + self.host
         self.library_cache_file = self._get_library_cache_file()
         self.library_cache = self._load_library_cache()
+        self.exercise_detail_cache_file = self._get_exercise_detail_cache_file()
+        self.exercise_detail_cache = self._load_exercise_detail_cache()
         with open(self.config_file, 'w') as f:
             json.dump(self.credentials, f)
 
@@ -380,10 +406,17 @@ class SpeedianceClient:
         url = f"{self.base_url}/api/app/customTrainingTemplate?ids={template_id}"
         self._request('DELETE', url, headers=self._get_headers())
 
-    def get_exercise_detail(self, exercise_id):
+    def get_exercise_detail(self, exercise_id, use_cache=True):
+        cache_key = str(exercise_id)
+        if use_cache and cache_key in self.exercise_detail_cache:
+            return self.exercise_detail_cache.get(cache_key, {})
         url = f"{self.base_url}/api/app/actionLibraryGroup/{exercise_id}?isDisplay=1"
         resp = self._request('GET', url, headers=self._get_headers())
-        return resp.json().get('data', {})
+        data = resp.json().get('data', {})
+        if use_cache and data:
+            self.exercise_detail_cache[cache_key] = data
+            self._save_exercise_detail_cache()
+        return data
 
     def is_exercise_unilateral(self, group_id):
         detail = self.get_exercise_detail(group_id)

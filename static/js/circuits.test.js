@@ -99,6 +99,25 @@ const fullExerciseExample = [{
         return workout.map(ex => ex.groupId);
     }
 
+    function makeExercise(groupId, repsList, isUnilateral = false) {
+        const sets = repsList.map(rep => ({
+            reps: rep,
+            weight: 0,
+            mode: 1,
+            rest: 30,
+            unit: 'reps'
+        }));
+        if (!isUnilateral) {
+            return { groupId, sets, isUnilateral: false };
+        }
+        const paired = [];
+        sets.forEach(set => {
+            paired.push({ ...set });
+            paired.push({ ...set });
+        });
+        return { groupId, sets: paired, isUnilateral: true };
+    }
+
     function testCircuitParsing() {
         let parsed = window.workoutToCircuits(cycleTwoThreeFourFive);
         try {
@@ -334,6 +353,99 @@ const fullExerciseExample = [{
 
     }
 
+    function testAppendEntryToCircuitBlock() {
+        let workout = cycleThree.slice();
+        workout = window.appendEntryToCircuitBlock(workout, 0, { groupId: 'Z' });
+        const parsed = window.workoutToCircuits(workout);
+        assertEqual(parsed.length, 4, 'appendEntryToCircuitBlock - parsed length adds a single item');
+        assertEqual(parsed[0].type, 'circuit', 'appendEntryToCircuitBlock - first block is circuit');
+        assertEqual(parsed[1].type, undefined, 'appendEntryToCircuitBlock - second block is single');
+        assertEqual(parsed[1].groupId, 'Z', 'appendEntryToCircuitBlock - single item is Z');
+        assertEqual(parsed[2].type, 'circuit', 'appendEntryToCircuitBlock - third block remains circuit');
+    }
+
+    function testRemoveWorkoutEntryAtIndex() {
+        const workout = [
+            { groupId: 'A' }, { groupId: 'B' }, { groupId: 'C' },
+            { groupId: 'A' }, { groupId: 'B' }, { groupId: 'C' },
+            { groupId: 'X' },
+            { groupId: 'D' }, { groupId: 'E' }, { groupId: 'F' },
+            { groupId: 'D' }, { groupId: 'E' }, { groupId: 'F' }
+        ];
+        const updated = window.removeWorkoutEntryAtIndex(workout, 6);
+        const parsed = window.workoutToCircuits(updated);
+        assertEqual(parsed.length, 2, 'removeWorkoutEntryAtIndex - two circuits remain after removing single');
+        assertEqual(parsed[0].type, 'circuit', 'removeWorkoutEntryAtIndex - first block is circuit');
+        assertEqual(parsed[1].type, 'circuit', 'removeWorkoutEntryAtIndex - second block is circuit');
+    }
+
+    function testReplaceExercisesWithCircuit() {
+        const a = makeExercise('A', [1, 2]);
+        const b = makeExercise('B', [9]);
+        const c = makeExercise('C', [7, 8, 9]);
+        const workout = [a, b, c];
+        const updated = window.replaceExercisesWithCircuit(workout, [0, 1, 2]);
+        const parsed = window.workoutToCircuits(updated);
+        assertEqual(parsed.length, 1, 'replaceExercisesWithCircuit - single circuit block');
+        assertEqual(parsed[0].type, 'circuit', 'replaceExercisesWithCircuit - block is circuit');
+        assertEqual(parsed[0].exercises.length, 3, 'replaceExercisesWithCircuit - cycle length 3');
+        assertEqual(parsed[0].exercises[0].length, 3, 'replaceExercisesWithCircuit - rounds grow to max');
+        assertEqual(parsed[0].exercises[1].length, 3, 'replaceExercisesWithCircuit - rounds grow to max (B)');
+        assertEqual(parsed[0].exercises[1][2].sets[0].reps, 9, 'replaceExercisesWithCircuit - short exercise repeats last set');
+    }
+
+    function testUndoCircuit() {
+        const a = makeExercise('A', [1, 2, 3]);
+        const b = makeExercise('B', [4, 5, 6]);
+        const circuitWorkout = window.replaceExercisesWithCircuit([a, b], [0, 1]);
+        const updated = window.undoCircuit(circuitWorkout, 0);
+        assertEqual(updated.length, 2, 'undoCircuit - circuit becomes two exercises');
+        assertEqual(updated[0].groupId, 'A', 'undoCircuit - first exercise is A');
+        assertEqual(updated[1].groupId, 'B', 'undoCircuit - second exercise is B');
+        assertEqual(updated[0].sets.length, 3, 'undoCircuit - A has 3 sets');
+        assertEqual(updated[1].sets.length, 3, 'undoCircuit - B has 3 sets');
+    }
+
+    function testRemoveCircuit() {
+        let workout = cycleThree.slice();
+        workout = window.removeCircuit(workout, 1);
+        const parsed = window.workoutToCircuits(workout);
+        assertEqual(parsed.length, 2, 'removeCircuit - number of circuits reduced');
+        assertEqual(parsed[0].exercises[0][0].groupId, 'A', 'removeCircuit - first circuit remains A');
+        assertEqual(parsed[1].exercises[0][0].groupId, 'G', 'removeCircuit - third circuit becomes second');
+    }
+
+    function testAddressHelpers() {
+        const fromStart = window.workoutIndexToCircuitIndex(cycleThree, 0);
+        assertEqual(fromStart.isCircuit, true, 'workoutIndexToCircuitIndex - index 0 is circuit');
+        assertEqual(fromStart.circuitIndex, 0, 'workoutIndexToCircuitIndex - circuit index 0');
+        assertEqual(fromStart.exerciseIndex, 0, 'workoutIndexToCircuitIndex - exercise index 0');
+        assertEqual(fromStart.roundIndex, 0, 'workoutIndexToCircuitIndex - round index 0');
+
+        const fromMiddle = window.workoutIndexToCircuitIndex(cycleThree, 4);
+        assertEqual(fromMiddle.isCircuit, true, 'workoutIndexToCircuitIndex - index 4 is circuit');
+        assertEqual(fromMiddle.circuitIndex, 0, 'workoutIndexToCircuitIndex - circuit index 0');
+        assertEqual(fromMiddle.exerciseIndex, 1, 'workoutIndexToCircuitIndex - exercise index 1');
+        assertEqual(fromMiddle.roundIndex, 1, 'workoutIndexToCircuitIndex - round index 1');
+
+        const fromSecondCircuit = window.workoutIndexToCircuitIndex(cycleThree, 9);
+        assertEqual(fromSecondCircuit.isCircuit, true, 'workoutIndexToCircuitIndex - index 9 is circuit');
+        assertEqual(fromSecondCircuit.circuitIndex, 1, 'workoutIndexToCircuitIndex - circuit index 1');
+        assertEqual(fromSecondCircuit.exerciseIndex, 0, 'workoutIndexToCircuitIndex - exercise index 0');
+        assertEqual(fromSecondCircuit.roundIndex, 0, 'workoutIndexToCircuitIndex - round index 0');
+
+        const workoutWithSingle = [
+            { groupId: 'A' }, { groupId: 'B' }, { groupId: 'C' },
+            { groupId: 'A' }, { groupId: 'B' }, { groupId: 'C' },
+            { groupId: 'X' },
+            { groupId: 'D' }, { groupId: 'E' }, { groupId: 'F' },
+            { groupId: 'D' }, { groupId: 'E' }, { groupId: 'F' }
+        ];
+        const fromSingle = window.workoutIndexToCircuitIndex(workoutWithSingle, 6);
+        assertEqual(fromSingle.isCircuit, false, 'workoutIndexToCircuitIndex - single entry not circuit');
+        assertEqual(fromSingle.circuitIndex, 1, 'workoutIndexToCircuitIndex - single entry block index');
+    }
+
 
 
     function testAppendSetToCircuit() {
@@ -368,8 +480,14 @@ const fullExerciseExample = [{
             { name: 'testCircuitDeletion', fn: testCircuitDeletion },
             { name: 'testMoveCircuits', fn: testMoveCircuits },
             { name: 'testCircuitReordering', fn: testCircuitReordering },
+            { name: 'testAppendEntryToCircuitBlock', fn: testAppendEntryToCircuitBlock },
+            { name: 'testRemoveWorkoutEntryAtIndex', fn: testRemoveWorkoutEntryAtIndex },
+            { name: 'testReplaceExercisesWithCircuit', fn: testReplaceExercisesWithCircuit },
+            { name: 'testUndoCircuit', fn: testUndoCircuit },
+            { name: 'testRemoveCircuit', fn: testRemoveCircuit },
             { name: 'testAppendSetToCircuit', fn: testAppendSetToCircuit },
             { name: 'testDeleteExerciseFromCircuit', fn: testDeleteExerciseFromCircuit },
+            { name: 'testAddressHelpers', fn: testAddressHelpers },
         ];
         tests.forEach(test => {
             try {

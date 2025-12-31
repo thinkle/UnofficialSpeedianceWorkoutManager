@@ -6,10 +6,13 @@
     }
 
     function cloneExercise(exercise) {
-        if (typeof structuredClone === 'function') {
-            return structuredClone(exercise);
+        const cloned = typeof structuredClone === 'function'
+            ? structuredClone(exercise)
+            : JSON.parse(JSON.stringify(exercise));
+        if (cloned && Object.prototype.hasOwnProperty.call(cloned, 'internalId')) {
+            cloned.internalId = Date.now() + Math.random();
         }
-        return JSON.parse(JSON.stringify(exercise));
+        return cloned;
     }
 
     function segmentMatches(signatures, startA, startB, len) {
@@ -17,6 +20,24 @@
             if (signatures[startA + i] !== signatures[startB + i]) return false;
         }
         return true;
+    }
+
+    function getSetGroupsForExercise(exercise) {
+        const sets = Array.isArray(exercise.sets) ? exercise.sets : [];
+        if (!exercise.isUnilateral) {
+            return sets.map(set => [set]);
+        }
+        const groups = [];
+        for (let i = 0; i < sets.length; i += 2) {
+            groups.push(sets.slice(i, i + 2));
+        }
+        return groups;
+    }
+
+    function cloneExerciseWithSetGroup(exercise, group) {
+        const clone = cloneExercise(exercise);
+        clone.sets = (group || []).map(set => ({ ...set }));
+        return clone;
     }
 
     function detectCircuitAtIndex(data, startIndex, maxCycle) {
@@ -132,6 +153,54 @@
         });
     }
 
+    function buildCircuitFromExercises(exercises) {
+        if (!Array.isArray(exercises) || exercises.length === 0) return [];
+        const grouped = exercises.map(getSetGroupsForExercise);
+        const maxRounds = Math.max(...grouped.map(groups => groups.length));
+        const interleaved = [];
+        for (let round = 0; round < maxRounds; round += 1) {
+            for (let i = 0; i < exercises.length; i += 1) {
+                const groups = grouped[i];
+                const group = groups[round] || groups[groups.length - 1];
+                if (!group) continue;
+                interleaved.push(cloneExerciseWithSetGroup(exercises[i], group));
+            }
+        }
+        return interleaved;
+    }
+
+    function replaceExercisesWithCircuit(workout, indexes) {
+        if (!Array.isArray(indexes) || indexes.length === 0) return workout.slice();
+        const ordered = indexes.slice().sort((a, b) => a - b);
+        const exercises = ordered.map(idx => workout[idx]).filter(Boolean);
+        if (exercises.length === 0) return workout.slice();
+        const circuit = buildCircuitFromExercises(exercises);
+        const indexSet = new Set(ordered);
+        const filtered = workout.filter((_, idx) => !indexSet.has(idx));
+        const insertAt = Math.max(0, Math.min(...ordered));
+        return filtered.slice(0, insertAt).concat(circuit, filtered.slice(insertAt));
+    }
+
+    function undoCircuit(workout, blockIndex) {
+        const blocks = parseWorkoutBlocks(workout);
+        const block = blocks[blockIndex];
+        if (!block || block.type !== 'circuit') return workout.slice();
+        const rebuiltExercises = block.exercises.map(group => {
+            const base = group[0];
+            if (!base) return null;
+            const combinedSets = [];
+            group.forEach(entry => {
+                (entry.sets || []).forEach(set => combinedSets.push({ ...set }));
+            });
+            const clone = cloneExercise(base);
+            clone.sets = combinedSets;
+            return clone;
+        }).filter(Boolean);
+        const replacement = rebuiltExercises.map(exercise => ({ type: 'single', exercise }));
+        blocks.splice(blockIndex, 1, ...replacement);
+        return flattenBlocks(blocks);
+    }
+
     function appendOntoCircuit(workout, circuitIndex, exercise) {
         const blocks = parseWorkoutBlocks(workout);
         const block = blocks[circuitIndex];
@@ -145,6 +214,21 @@
         appended.push(newColumn);
         block.exercises = appended;
         return flattenBlocks(blocks);
+    }
+
+    function appendEntryToCircuitBlock(workout, circuitIndex, entry) {
+        const blocks = parseWorkoutBlocks(workout);
+        const block = blocks[circuitIndex];
+        if (!block || block.type !== 'circuit') return workout.slice();
+        const start = block.start;
+        const end = block.start + block.length;
+        const segment = workout.slice(start, end);
+        return workout.slice(0, start).concat(segment, [entry], workout.slice(end));
+    }
+
+    function removeWorkoutEntryAtIndex(workout, entryIndex) {
+        if (entryIndex < 0 || entryIndex >= workout.length) return workout.slice();
+        return workout.filter((_, idx) => idx !== entryIndex);
     }
 
     function deleteSetFromCircuit(workout, circuitIndex, itemIndex) {
@@ -196,6 +280,14 @@
         return flattenBlocks(blocks);
     }
 
+    function removeCircuit(workout, blockIndex) {
+        const blocks = parseWorkoutBlocks(workout);
+        const block = blocks[blockIndex];
+        if (!block || block.type !== 'circuit') return workout.slice();
+        blocks.splice(blockIndex, 1);
+        return flattenBlocks(blocks);
+    }
+
     function moveCircuit(workout, fromIndex, toIndex) {
         const blocks = parseWorkoutBlocks(workout);
         if (fromIndex < 0 || fromIndex >= blocks.length) return workout.slice();
@@ -218,18 +310,79 @@
         return flattenBlocks(blocks);
     }
 
+    function workoutIndexToCircuitIndex(workout, workoutIndex) {
+        const result = {
+            workoutIndex,
+            isCircuit: false,
+            blockIndex: null,
+            circuitIndex: null,
+            exerciseIndex: null,
+            roundIndex: null,
+            cycleLen: null,
+            rounds: null,
+            start: null
+        };
+        if (!Array.isArray(workout) || workoutIndex < 0 || workoutIndex >= workout.length) {
+            return result;
+        }
+        const blocks = buildCondensedBlocks(workout);
+        for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
+            const block = blocks[blockIndex];
+            if (block.type === 'circuit') {
+                const start = block.start;
+                const end = start + block.length;
+                if (workoutIndex >= start && workoutIndex < end) {
+                    const offset = workoutIndex - start;
+                    return {
+                        workoutIndex,
+                        isCircuit: true,
+                        blockIndex,
+                        circuitIndex: blockIndex,
+                        exerciseIndex: offset % block.cycleLen,
+                        roundIndex: Math.floor(offset / block.cycleLen),
+                        cycleLen: block.cycleLen,
+                        rounds: block.rounds,
+                        start
+                    };
+                }
+                continue;
+            }
+            if (block.index === workoutIndex) {
+                return {
+                    workoutIndex,
+                    isCircuit: false,
+                    blockIndex,
+                    circuitIndex: blockIndex,
+                    exerciseIndex: null,
+                    roundIndex: null,
+                    cycleLen: null,
+                    rounds: null,
+                    start: block.index
+                };
+            }
+        }
+        return result;
+    }
+
     const Circuits = {
         exerciseSignature,
         segmentMatches,
         detectCircuitAtIndex,
         buildCondensedBlocks,
         workoutToCircuits,
+        buildCircuitFromExercises,
+        replaceExercisesWithCircuit,
+        undoCircuit,
         appendOntoCircuit,
+        appendEntryToCircuitBlock,
+        removeWorkoutEntryAtIndex,
         deleteSetFromCircuit,
         appendSetToCircuit,
         deleteExerciseFromCircuit,
+        removeCircuit,
         moveCircuit,
         reorderCircuitItems,
+        workoutIndexToCircuitIndex,
     };
 
     window.Circuits = Circuits;
@@ -238,11 +391,18 @@
     window.detectCircuitAtIndex = detectCircuitAtIndex;
     window.buildCondensedBlocks = buildCondensedBlocks;
     window.workoutToCircuits = workoutToCircuits;
+    window.buildCircuitFromExercises = buildCircuitFromExercises;
+    window.replaceExercisesWithCircuit = replaceExercisesWithCircuit;
+    window.undoCircuit = undoCircuit;
     window.appendOntoCircuit = appendOntoCircuit;
     window.appendExerciseToCircuit = appendOntoCircuit;
+    window.appendEntryToCircuitBlock = appendEntryToCircuitBlock;
+    window.removeWorkoutEntryAtIndex = removeWorkoutEntryAtIndex;
     window.deleteSetFromCircuit = deleteSetFromCircuit;
     window.appendSetToCircuit = appendSetToCircuit;
     window.deleteExerciseFromCircuit = deleteExerciseFromCircuit;
+    window.removeCircuit = removeCircuit;
     window.moveCircuit = moveCircuit;
     window.reorderCircuitItems = reorderCircuitItems;
+    window.workoutIndexToCircuitIndex = workoutIndexToCircuitIndex;
 })();

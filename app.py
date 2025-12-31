@@ -503,6 +503,7 @@ def edit(code):
         workout = client.get_workout_detail(code)
         library = client.get_library()
         categories = client.get_categories()
+        accessories = client.get_accessories()
     except Exception as e:
         if str(e) == "Unauthorized":
             client.logout()
@@ -514,6 +515,12 @@ def edit(code):
     if not workout:
         flash("Could not load workout details.", "error")
         return redirect(url_for('index'))
+
+    accessory_map = {str(acc['id']): acc['name'] for acc in accessories}
+    for ex in library:
+        acc_ids = str(ex.get('accessories', '')).split(',')
+        names = [accessory_map.get(aid, 'Standard') for aid in acc_ids if aid]
+        ex['equipment_name'] = ', '.join(names) if names else 'Standard'
 
     unit = client.credentials.get("unit", 0)
     custom_instruction = client.credentials.get("custom_instruction", "")
@@ -553,6 +560,7 @@ def create():
     try:
         library = client.get_library()
         categories = client.get_categories()
+        accessories = client.get_accessories()
     except Exception as e:
         if str(e) == "Unauthorized":
             client.logout()
@@ -560,6 +568,13 @@ def create():
             return redirect(url_for('settings'))
         library = []
         categories = []
+        accessories = []
+
+    accessory_map = {str(acc['id']): acc['name'] for acc in accessories}
+    for ex in library:
+        acc_ids = str(ex.get('accessories', '')).split(',')
+        names = [accessory_map.get(aid, 'Standard') for aid in acc_ids if aid]
+        ex['equipment_name'] = ', '.join(names) if names else 'Standard'
 
     unit = client.credentials.get("unit", 0)
     custom_instruction = client.credentials.get("custom_instruction", "")

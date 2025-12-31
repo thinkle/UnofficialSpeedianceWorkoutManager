@@ -18,6 +18,44 @@
             <input type="text" id="search-input" 
                    class="block w-full p-4 pl-10 text-sm border rounded-lg bg-gray-800 border-gray-700 placeholder-gray-400 text-white focus:ring-green-500 focus:border-green-500" 
                    placeholder="Search exercises (e.g. Bench Press)...">
+            <details class="mt-2 rounded border border-gray-700 bg-gray-900/60 p-2 text-xs text-gray-400">
+                <summary class="cursor-pointer select-none text-gray-300">Filters</summary>
+                <div class="mt-2 space-y-3">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="search-fulltext" class="h-4 w-4">
+                        <label for="search-fulltext">Full text (equipment, muscles, category)</label>
+                    </div>
+                    <details class="rounded border border-gray-700 bg-gray-900/60 p-2">
+                        <summary class="cursor-pointer select-none text-gray-300">Equipment filters</summary>
+                        <div class="mt-2 grid grid-cols-2 gap-3">
+                            <div>
+                                <div class="text-gray-500 mb-1">Include</div>
+                                <div id="equipment-include" class="space-y-1"></div>
+                            </div>
+                            <div>
+                                <div class="text-gray-500 mb-1">Exclude</div>
+                                <div id="equipment-exclude" class="space-y-1"></div>
+                            </div>
+                        </div>
+                    </details>
+                    <div class="rounded border border-gray-700 bg-gray-900/60 p-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span>Detail filters (cable height, bench angle)</span>
+                        </div>
+                        <div class="mt-2 flex gap-2">
+                            <select id="detail-cable" class="w-1/2 bg-gray-800 border border-gray-700 p-1.5 rounded text-gray-300" disabled>
+                                <option value="all">Cable height: Any</option>
+                            </select>
+                            <select id="detail-bench" class="w-1/2 bg-gray-800 border border-gray-700 p-1.5 rounded text-gray-300" disabled>
+                                <option value="all">Bench angle: Any</option>
+                            </select>
+                        </div>
+                        <div id="detail-missing" class="mt-2 text-gray-500">
+                            Detail filters auto-load when base filters are active (up to 75 results).
+                        </div>
+                    </div>
+                </div>
+            </details>
         </div>
     </div>
 
@@ -81,7 +119,23 @@
                 </thead>
                 <tbody class="bg-gray-800 divide-y divide-gray-700">
                     {% for ex in exercises %}
-                    <tr class="hover:bg-gray-700/50 exercise-row cursor-pointer" onclick="window.location.href='/exercise/{{ ex.id }}'" data-title="{{ ex.title | lower }}" data-muscle="{{ ex.trainingPartId2 }}" data-category="{{ ex.category_id }}" data-device="{{ ex.device_type_tag | default(ex.device_type) }}">
+                    {% set focus_alias = '' %}
+                    {% if ex.trainingPartId2 == 11 %}
+                        {% set focus_alias = 'chest pecs pectoral' %}
+                    {% elif ex.trainingPartId2 == 12 %}
+                        {% set focus_alias = 'shoulders delts deltoids' %}
+                    {% elif ex.trainingPartId2 == 13 %}
+                        {% set focus_alias = 'back lats latissimus' %}
+                    {% elif ex.trainingPartId2 == 14 %}
+                        {% set focus_alias = 'glutes glute hips' %}
+                    {% elif ex.trainingPartId2 == 15 %}
+                        {% set focus_alias = 'legs quads hamstrings calves' %}
+                    {% elif ex.trainingPartId2 == 16 %}
+                        {% set focus_alias = 'arms biceps triceps forearms' %}
+                    {% elif ex.trainingPartId2 == 17 %}
+                        {% set focus_alias = 'abs core abdominal' %}
+                    {% endif %}
+                    <tr class="hover:bg-gray-700/50 exercise-row cursor-pointer" onclick="window.location.href='/exercise/{{ ex.id }}'" data-id="{{ ex.id }}" data-title="{{ ex.title | lower }}" data-search="{{ (ex.title ~ ' ' ~ ex.category_name ~ ' ' ~ ex.equipment_name ~ ' ' ~ ex.mainMuscleGroupName ~ ' ' ~ focus_alias ~ ' ' ~ (ex.auxiliaryMuscleGroupList | map(attribute='muscleGroupName') | join(' '))) | lower }}" data-equipment="{{ ex.equipment_name | default('') | lower }}" data-muscle="{{ ex.trainingPartId2 }}" data-category="{{ ex.category_id }}" data-device="{{ ex.device_type_tag | default(ex.device_type) }}">
                         <td class="px-4 py-2 font-mono text-xs text-gray-500 align-top">{{ ex.id }}</td>
                         <td class="px-4 py-2 font-bold text-white align-top">
                             {{ ex.title }}
@@ -120,9 +174,28 @@
 
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6" id="exercise-grid">
         {% for ex in exercises %}
+        {% set focus_alias = '' %}
+        {% if ex.trainingPartId2 == 11 %}
+            {% set focus_alias = 'chest pecs pectoral' %}
+        {% elif ex.trainingPartId2 == 12 %}
+            {% set focus_alias = 'shoulders delts deltoids' %}
+        {% elif ex.trainingPartId2 == 13 %}
+            {% set focus_alias = 'back lats latissimus' %}
+        {% elif ex.trainingPartId2 == 14 %}
+            {% set focus_alias = 'glutes glute hips' %}
+        {% elif ex.trainingPartId2 == 15 %}
+            {% set focus_alias = 'legs quads hamstrings calves' %}
+        {% elif ex.trainingPartId2 == 16 %}
+            {% set focus_alias = 'arms biceps triceps forearms' %}
+        {% elif ex.trainingPartId2 == 17 %}
+            {% set focus_alias = 'abs core abdominal' %}
+        {% endif %}
         <a href="/exercise/{{ ex.id }}" 
            class="exercise-card group block bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-green-500 transition shadow-lg hover:shadow-green-500/10"
+           data-id="{{ ex.id }}"
            data-title="{{ ex.title | lower }}"
+           data-search="{{ (ex.title ~ ' ' ~ ex.category_name ~ ' ' ~ ex.equipment_name ~ ' ' ~ ex.mainMuscleGroupName ~ ' ' ~ focus_alias ~ ' ' ~ (ex.auxiliaryMuscleGroupList | map(attribute='muscleGroupName') | join(' '))) | lower }}"
+           data-equipment="{{ ex.equipment_name | default('') | lower }}"
            data-muscle="{{ ex.trainingPartId2 }}"
            data-category="{{ ex.category_id }}"
            data-device="{{ ex.device_type_tag | default(ex.device_type) }}">
@@ -167,17 +240,33 @@
 <script>
     // Simple Client-Side Filtering
     const searchInput = document.getElementById('search-input');
+    const searchFulltext = document.getElementById('search-fulltext');
+    const detailCable = document.getElementById('detail-cable');
+    const detailBench = document.getElementById('detail-bench');
+    const detailMissing = document.getElementById('detail-missing');
+    const equipmentInclude = document.getElementById('equipment-include');
+    const equipmentExclude = document.getElementById('equipment-exclude');
     const cards = document.querySelectorAll('.exercise-card');
     const tableRows = document.querySelectorAll('.exercise-row');
     const noResults = document.getElementById('no-results');
     let currentFilter = 'all';
     let currentCategory = 'all';
     let currentDevice = 'all';
+    const detailCache = new Map();
+    const includeEquipment = new Set();
+    const excludeEquipment = new Set();
+    const DETAIL_FETCH_LIMIT = 75;
+    let detailFetchInFlight = false;
 
     // 1. Search Logic
     searchInput.addEventListener('input', (e) => {
         applyFilters(e.target.value.toLowerCase(), currentFilter, currentCategory, currentDevice);
     });
+    searchFulltext.addEventListener('change', () => {
+        applyFilters(searchInput.value.toLowerCase(), currentFilter, currentCategory, currentDevice);
+    });
+
+    buildEquipmentFilters();
 
     // 2. Muscle Filter Logic
     function filterByMuscle(muscleId, btnElement) {
@@ -224,6 +313,172 @@
         applyFilters(searchInput.value.toLowerCase(), currentFilter, currentCategory, currentDevice);
     }
 
+    function splitEquipment(text) {
+        return text
+            .split(',')
+            .map(val => val.trim().toLowerCase())
+            .filter(Boolean);
+    }
+
+    function buildEquipmentFilters() {
+        const equipmentSet = new Set();
+        cards.forEach(card => {
+            splitEquipment(card.getAttribute('data-equipment') || '').forEach(eq => equipmentSet.add(eq));
+        });
+
+        const sorted = Array.from(equipmentSet).sort();
+        const renderOption = (name, container, setRef) => {
+            const id = `${container.id}-${name.replace(/\\s+/g, '-')}`;
+            const wrapper = document.createElement('label');
+            wrapper.className = 'flex items-center gap-2 text-gray-300';
+            wrapper.innerHTML = `<input type="checkbox" class="h-3.5 w-3.5" id="${id}"><span>${name}</span>`;
+            const checkbox = wrapper.querySelector('input');
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    setRef.add(name);
+                } else {
+                    setRef.delete(name);
+                }
+                applyFilters(searchInput.value.toLowerCase(), currentFilter, currentCategory, currentDevice);
+            });
+            container.appendChild(wrapper);
+        };
+
+        sorted.forEach(name => {
+            renderOption(name, equipmentInclude, includeEquipment);
+            renderOption(name, equipmentExclude, excludeEquipment);
+        });
+    }
+
+    function matchEquipment(itemEquipment) {
+        const eqList = splitEquipment(itemEquipment);
+        if (includeEquipment.size > 0 && !eqList.some(eq => includeEquipment.has(eq))) {
+            return false;
+        }
+        if (excludeEquipment.size > 0 && eqList.some(eq => excludeEquipment.has(eq))) {
+            return false;
+        }
+        return true;
+    }
+
+    function hasBaseFilters() {
+        const term = searchInput.value.toLowerCase().trim();
+        const hasTerm = term.length > 0;
+        const hasMuscle = currentFilter !== 'all';
+        const hasCategory = currentCategory !== 'all';
+        const hasDevice = currentDevice !== 'all';
+        const hasEquipment = includeEquipment.size > 0 || excludeEquipment.size > 0;
+        return hasTerm || hasMuscle || hasCategory || hasDevice || hasEquipment;
+    }
+
+    function detailFiltersActive() {
+        return detailCable.value !== 'all' || detailBench.value !== 'all';
+    }
+
+    function setDetailMessage(text) {
+        if (!detailMissing) return;
+        if (text) {
+            detailMissing.textContent = text;
+            detailMissing.classList.remove('hidden');
+        } else {
+            detailMissing.classList.add('hidden');
+        }
+    }
+
+    function getCandidateIds() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const terms = searchTerm.split(/\s+/).filter(Boolean);
+        const useFulltext = searchFulltext && searchFulltext.checked;
+
+        const ids = [];
+        cards.forEach(card => {
+            const searchText = useFulltext ? card.getAttribute('data-search') : card.getAttribute('data-title');
+            const cardMuscle = card.getAttribute('data-muscle');
+            const cardCategory = card.getAttribute('data-category');
+            const cardDevice = (card.getAttribute('data-device') || '').split(',');
+            const cardId = card.getAttribute('data-id');
+            const cardEquipment = card.getAttribute('data-equipment') || '';
+
+            const matchesSearch = terms.length === 0 || terms.every(term => searchText.includes(term));
+            const matchesMuscle = (currentFilter === 'all') || (cardMuscle === currentFilter);
+            const matchesCategory = categoryMatch(cardCategory, currentCategory);
+            const matchesDevice = (currentDevice === 'all') || cardDevice.includes(currentDevice);
+            const matchesEquipment = matchEquipment(cardEquipment);
+
+            if (matchesSearch && matchesMuscle && matchesCategory && matchesDevice && matchesEquipment) {
+                ids.push(cardId);
+            }
+        });
+        return ids;
+    }
+
+    function formatCablePosition(pos) {
+        if (pos === 10) return "Platform End (Lowest/Floor)";
+        if (pos === 0) return "Top (Highest)";
+        return `Level ${pos}`;
+    }
+
+    async function fetchDetailsForIds(ids) {
+        const chunkSize = 10;
+        for (let i = 0; i < ids.length; i += chunkSize) {
+            const chunk = ids.slice(i, i + chunkSize);
+            await Promise.all(chunk.map(async (id) => {
+                if (detailCache.has(id)) return;
+                try {
+                    const res = await fetch(`/api/exercise/${id}`);
+                    const data = await res.json();
+                    detailCache.set(id, {
+                        outPosition: data.outPosition,
+                        foldingStoolAngle: data.foldingStoolAngle,
+                    });
+                } catch (e) {
+                    detailCache.set(id, { outPosition: null, foldingStoolAngle: null });
+                }
+            }));
+        }
+    }
+
+    function populateDetailFilters() {
+        const cableValues = new Set();
+        const benchValues = new Set();
+
+        detailCache.forEach((detail) => {
+            if (detail.outPosition !== undefined && detail.outPosition !== null) {
+                cableValues.add(detail.outPosition);
+            } else {
+                cableValues.add("unknown");
+            }
+            if (detail.foldingStoolAngle !== undefined && detail.foldingStoolAngle !== null && detail.foldingStoolAngle !== "") {
+                benchValues.add(String(detail.foldingStoolAngle));
+            } else {
+                benchValues.add("unknown");
+            }
+        });
+
+        const sortedCable = Array.from(cableValues).sort((a, b) => {
+            if (a === "unknown") return 1;
+            if (b === "unknown") return -1;
+            return Number(a) - Number(b);
+        });
+        const sortedBench = Array.from(benchValues).sort((a, b) => {
+            if (a === "unknown") return 1;
+            if (b === "unknown") return -1;
+            return Number(a) - Number(b);
+        });
+
+        detailCable.innerHTML = '<option value="all">Cable height: Any</option>';
+        sortedCable.forEach((val) => {
+            const label = val === "unknown" ? "Unknown" : formatCablePosition(Number(val));
+            detailCable.innerHTML += `<option value="${val}">${label}</option>`;
+        });
+
+        detailBench.innerHTML = '<option value="all">Bench angle: Any</option>';
+        sortedBench.forEach((val) => {
+            const label = val === "unknown" ? "Unknown" : `${val}°`;
+            detailBench.innerHTML += `<option value="${val}">${label}</option>`;
+        });
+    }
+
     // Combined Filter Application
     function categoryMatch(itemCat, catId) {
         if (catId === 'all') return true;
@@ -231,22 +486,81 @@
         return ids.includes(itemCat);
     }
 
-    function applyFilters(searchTerm, muscleId, catId, deviceType) {
+    async function applyFilters(searchTerm, muscleId, catId, deviceType) {
         let visibleCount = 0;
+        const terms = searchTerm.split(/\s+/).filter(Boolean);
+        const useFulltext = searchFulltext && searchFulltext.checked;
+        const detailActive = detailFiltersActive();
+        const baseFiltersActive = hasBaseFilters();
+        let applyDetailFilters = false;
+        let candidateIds = [];
+        let missingIds = [];
+
+        if (detailActive) {
+            if (!baseFiltersActive) {
+                setDetailMessage(`Detail filters auto-load when base filters are active (up to ${DETAIL_FETCH_LIMIT} results).`);
+            } else {
+                candidateIds = getCandidateIds();
+                if (candidateIds.length > DETAIL_FETCH_LIMIT) {
+                    setDetailMessage(`Detail filters paused at ${candidateIds.length} results. Narrow your filters below ${DETAIL_FETCH_LIMIT}.`);
+                } else {
+                    missingIds = candidateIds.filter(id => !detailCache.has(id));
+                    if (missingIds.length > 0) {
+                        setDetailMessage(`Loading details for ${missingIds.length} exercises...`);
+                        if (!detailFetchInFlight) {
+                            detailFetchInFlight = true;
+                            await fetchDetailsForIds(missingIds);
+                            detailFetchInFlight = false;
+                            populateDetailFilters();
+                            detailCable.disabled = false;
+                            detailBench.disabled = false;
+                            return applyFilters(searchInput.value.toLowerCase(), currentFilter, currentCategory, currentDevice);
+                        }
+                    } else if (detailCable.disabled || detailBench.disabled) {
+                        populateDetailFilters();
+                        detailCable.disabled = false;
+                        detailBench.disabled = false;
+                    } else {
+                        setDetailMessage('');
+                    }
+                    applyDetailFilters = missingIds.length === 0;
+                }
+            }
+        } else {
+            setDetailMessage('');
+        }
 
         // Filter Cards
         cards.forEach(card => {
-            const title = card.getAttribute('data-title');
+            const searchText = useFulltext ? card.getAttribute('data-search') : card.getAttribute('data-title');
             const cardMuscle = card.getAttribute('data-muscle');
             const cardCategory = card.getAttribute('data-category');
             const cardDevice = (card.getAttribute('data-device') || '').split(',');
+            const cardId = card.getAttribute('data-id');
+            const cardEquipment = card.getAttribute('data-equipment') || '';
             
-            const matchesSearch = title.includes(searchTerm);
+            const matchesSearch = terms.length === 0 || terms.every(term => searchText.includes(term));
             const matchesMuscle = (muscleId === 'all') || (cardMuscle === muscleId);
             const matchesCategory = categoryMatch(cardCategory, catId);
             const matchesDevice = (deviceType === 'all') || cardDevice.includes(deviceType);
+            const matchesEquipment = matchEquipment(cardEquipment);
+            const baseMatch = matchesSearch && matchesMuscle && matchesCategory && matchesDevice && matchesEquipment;
+            let matchesDetail = true;
+            if (detailActive && applyDetailFilters) {
+                const detail = detailCache.get(cardId);
+                if (!detail) {
+                    matchesDetail = false;
+                } else {
+                    const cableVal = detail.outPosition === undefined || detail.outPosition === null ? "unknown" : String(detail.outPosition);
+                    const benchVal = detail.foldingStoolAngle === undefined || detail.foldingStoolAngle === null || detail.foldingStoolAngle === "" ? "unknown" : String(detail.foldingStoolAngle);
+                    const selectedCable = detailCable.value;
+                    const selectedBench = detailBench.value;
+                    if (selectedCable !== 'all' && cableVal !== selectedCable) matchesDetail = false;
+                    if (selectedBench !== 'all' && benchVal !== selectedBench) matchesDetail = false;
+                }
+            }
 
-            if (matchesSearch && matchesMuscle && matchesCategory && matchesDevice) {
+            if (baseMatch && matchesDetail) {
                 card.style.display = 'block';
                 visibleCount++;
             } else {
@@ -256,17 +570,35 @@
 
         // Filter Table Rows
         tableRows.forEach(row => {
-            const title = row.getAttribute('data-title');
+            const searchText = useFulltext ? row.getAttribute('data-search') : row.getAttribute('data-title');
             const rowMuscle = row.getAttribute('data-muscle');
             const rowCategory = row.getAttribute('data-category');
             const rowDevice = (row.getAttribute('data-device') || '').split(',');
+            const rowId = row.getAttribute('data-id');
+            const rowEquipment = row.getAttribute('data-equipment') || '';
             
-            const matchesSearch = title.includes(searchTerm);
+            const matchesSearch = terms.length === 0 || terms.every(term => searchText.includes(term));
             const matchesMuscle = (muscleId === 'all') || (rowMuscle === muscleId);
             const matchesCategory = categoryMatch(rowCategory, catId);
             const matchesDevice = (deviceType === 'all') || rowDevice.includes(deviceType);
+            const matchesEquipment = matchEquipment(rowEquipment);
+            const baseMatch = matchesSearch && matchesMuscle && matchesCategory && matchesDevice && matchesEquipment;
+            let matchesDetail = true;
+            if (detailActive && applyDetailFilters) {
+                const detail = detailCache.get(rowId);
+                if (!detail) {
+                    matchesDetail = false;
+                } else {
+                    const cableVal = detail.outPosition === undefined || detail.outPosition === null ? "unknown" : String(detail.outPosition);
+                    const benchVal = detail.foldingStoolAngle === undefined || detail.foldingStoolAngle === null || detail.foldingStoolAngle === "" ? "unknown" : String(detail.foldingStoolAngle);
+                    const selectedCable = detailCable.value;
+                    const selectedBench = detailBench.value;
+                    if (selectedCable !== 'all' && cableVal !== selectedCable) matchesDetail = false;
+                    if (selectedBench !== 'all' && benchVal !== selectedBench) matchesDetail = false;
+                }
+            }
 
-            if (matchesSearch && matchesMuscle && matchesCategory && matchesDevice) {
+            if (baseMatch && matchesDetail) {
                 row.style.display = 'table-row';
             } else {
                 row.style.display = 'none';
@@ -279,6 +611,13 @@
             noResults.classList.add('hidden');
         }
     }
+
+    detailCable.addEventListener('change', () => {
+        applyFilters(searchInput.value.toLowerCase(), currentFilter, currentCategory, currentDevice);
+    });
+    detailBench.addEventListener('change', () => {
+        applyFilters(searchInput.value.toLowerCase(), currentFilter, currentCategory, currentDevice);
+    });
 
     function toggleView() {
         const grid = document.getElementById('exercise-grid');
