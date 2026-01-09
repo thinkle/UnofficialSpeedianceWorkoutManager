@@ -6,6 +6,7 @@ import sys
 import webbrowser
 from threading import Timer, Thread
 import requests
+from datetime import datetime, timedelta
 try:
     import tkinter as tk
     from tkinter import scrolledtext
@@ -75,6 +76,307 @@ def local_cache_filter(url, force=False):
     # If not cached and not forced, return original URL to let browser fetch directly
     return url
 
+def _extract_first_value(data, keys):
+    if not isinstance(data, dict):
+        return None
+    for key in keys:
+        if key in data:
+            value = data.get(key)
+            if value is not None and value != "":
+                return value
+    return None
+
+def _parse_history_datetime(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        ts = float(value)
+    elif isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return None
+        if s.isdigit():
+            ts = float(s)
+        else:
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d %H:%M:%S"):
+                try:
+                    return datetime.strptime(s, fmt)
+                except Exception:
+                    continue
+            try:
+                return datetime.fromisoformat(s.replace("Z", "+00:00"))
+            except Exception:
+                return None
+    else:
+        return None
+
+    if ts > 1e12:
+        ts /= 1000.0
+    elif ts > 1e10:
+        ts /= 1000.0
+    try:
+        return datetime.fromtimestamp(ts)
+    except Exception:
+        return None
+
+def _format_history_datetime(value):
+    dt = _parse_history_datetime(value)
+    if not dt:
+        return None
+    try:
+        return dt.strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return None
+
+def _parse_history_date(value):
+    dt = _parse_history_datetime(value)
+    if not dt:
+        return None
+    try:
+        return dt.date()
+    except Exception:
+        return None
+
+def _format_number(value):
+    try:
+        num = float(value)
+    except Exception:
+        return str(value)
+    if num.is_integer():
+        return str(int(num))
+    return f"{num:.1f}"
+
+def _format_duration(entry):
+    minute_keys = [
+        "durationMinute",
+        "durationMinutes",
+        "durationMin",
+        "durationMins",
+        "duration_min",
+        "duration_mins",
+        "totalMinutes",
+        "totalMinute",
+    ]
+    second_keys = [
+        "duration",
+        "durationSeconds",
+        "durationSec",
+        "totalSeconds",
+        "totalTime",
+        "timeSeconds",
+        "trainingTime",
+    ]
+    minutes = _extract_first_value(entry, minute_keys)
+    if minutes is not None:
+        return f"{_format_number(minutes)} min"
+
+    seconds = _extract_first_value(entry, second_keys)
+    if seconds is None:
+        return None
+    try:
+        seconds_val = float(seconds)
+    except Exception:
+        return str(seconds)
+    if seconds_val > 1e5:
+        seconds_val /= 1000.0
+    minutes_val = seconds_val / 60.0
+    if minutes_val >= 1:
+        return f"{_format_number(minutes_val)} min"
+    return f"{_format_number(seconds_val)} sec"
+
+def _format_seconds_value(value):
+    if value is None:
+        return None
+    try:
+        seconds_val = float(value)
+    except Exception:
+        return str(value)
+    if seconds_val > 1e5:
+        seconds_val /= 1000.0
+    minutes_val = seconds_val / 60.0
+    if minutes_val >= 1:
+        return f"{_format_number(minutes_val)} min"
+    return f"{_format_number(seconds_val)} sec"
+
+def _summarize_weight_detail(value):
+    if not value:
+        return None
+    if not isinstance(value, str):
+        value = str(value)
+    parts = [p.strip() for p in value.split(",") if p.strip()]
+    weights = []
+    for part in parts:
+        try:
+            weights.append(float(part))
+        except Exception:
+            continue
+    if not weights:
+        return None
+    min_w = min(weights)
+    max_w = max(weights)
+    if min_w == max_w:
+        return _format_number(min_w)
+    return f"{_format_number(min_w)}-{_format_number(max_w)}"
+
+def _extract_history_entries(payload):
+    if payload is None:
+        return []
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        candidates = ["data", "items", "result", "workouts", "history", "entries", "sessions", "records"]
+        for key in candidates:
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+            if isinstance(value, dict):
+                for inner_key in candidates:
+                    inner_value = value.get(inner_key)
+                    if isinstance(inner_value, list):
+                        return inner_value
+        return [payload]
+    return []
+
+def _flatten_history_entries(entries):
+    list_keys = [
+        "records",
+        "recordList",
+        "trainingList",
+        "trainingInfoList",
+        "items",
+        "sessions",
+        "workouts",
+        "list",
+    ]
+    flattened = []
+    session_keys = ["id", "trainingId", "startTimestamp", "endTimestamp", "trainingTime"]
+    for entry in entries:
+        nested = None
+        date_hint = None
+        if isinstance(entry, dict):
+            date_hint = _extract_first_value(entry, ["date", "day", "trainingDate", "recordDate"])
+            for key in list_keys:
+                value = entry.get(key)
+                if isinstance(value, list) and value:
+                    has_session_item = any(
+                        isinstance(item, dict) and _extract_first_value(item, session_keys)
+                        for item in value
+                    )
+                    if has_session_item or not _extract_first_value(entry, session_keys):
+                        nested = value
+                        break
+        if nested:
+            for item in nested:
+                if isinstance(item, dict) and date_hint:
+                    cloned = dict(item)
+                    cloned.setdefault("date", date_hint)
+                    flattened.append(cloned)
+                else:
+                    flattened.append(item)
+        else:
+            flattened.append(entry)
+    return flattened
+
+def _normalize_history_entries(entries, unit):
+    unit_label = "lbs" if unit == 1 else "kg"
+    normalized = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            normalized.append({
+                "title": str(entry),
+                "performed_at": None,
+                "device": None,
+                "metrics": [],
+                "raw_json": json.dumps(entry, indent=2),
+                "detail_id": None,
+                "sort_ts": 0,
+            })
+            continue
+
+        title = _extract_first_value(entry, ["name", "workoutName", "templateName", "planName", "title"]) or "Workout"
+        performed_at_value = _extract_first_value(entry, [
+            "completedAt",
+            "completed_at",
+            "finishTime",
+            "finish_time",
+            "endTime",
+            "end_time",
+            "endTimestamp",
+            "startTime",
+            "start_time",
+            "createTime",
+            "createdAt",
+            "timestamp",
+            "ts",
+            "date",
+            "day",
+            "recordDate",
+        ])
+        performed_at = _format_history_datetime(performed_at_value)
+        performed_dt = _parse_history_datetime(performed_at_value)
+        sort_ts = performed_dt.timestamp() if performed_dt else 0
+
+        device_type = _extract_first_value(entry, ["deviceType", "device_type"])
+        device_label = None
+        if device_type is not None:
+            if str(device_type) == "1":
+                device_label = "Gym Monster"
+            elif str(device_type) == "2":
+                device_label = "Gym Pal"
+            else:
+                device_label = str(device_type)
+
+        metrics = []
+        duration = _format_duration(entry)
+        if duration:
+            metrics.append({"label": "Duration", "value": duration})
+
+        calories = _extract_first_value(entry, ["calories", "calorie", "kcal", "burnCalories", "burningCalories", "totalCalories"])
+        if calories is not None:
+            metrics.append({"label": "Calories", "value": f"{_format_number(calories)} kcal"})
+
+        volume = _extract_first_value(entry, ["totalCapacity", "totalVolume", "volume", "totalWeight", "totalWeights"])
+        if volume is not None:
+            metrics.append({"label": "Volume", "value": f"{_format_number(volume)} {unit_label}"})
+
+        count = _extract_first_value(entry, [
+            "actionNum",
+            "exerciseCount",
+            "movementCount",
+            "setCount",
+            "trainingCount",
+            "actionTotalCount",
+            "finishActionCount",
+        ])
+        if count is None:
+            for key in ["actions", "actionList", "exercises", "exerciseList", "sets"]:
+                if isinstance(entry.get(key), list):
+                    count = len(entry.get(key))
+                    break
+        if count is not None:
+            metrics.append({"label": "Exercises", "value": _format_number(count)})
+
+        session_id = _extract_first_value(entry, ["sessionId", "session_id", "id", "workoutId", "trainingId"])
+        if session_id is not None:
+            metrics.append({"label": "Session ID", "value": str(session_id)})
+
+        detail_id = _extract_first_value(entry, ["trainingId", "training_id", "id"])
+
+        normalized.append({
+            "title": title,
+            "performed_at": performed_at,
+            "device": device_label,
+            "metrics": metrics,
+            "raw_json": json.dumps(entry, indent=2),
+            "detail_id": detail_id,
+            "sort_ts": sort_ts,
+        })
+
+    normalized.sort(key=lambda item: item["sort_ts"], reverse=True)
+    for item in normalized:
+        item.pop("sort_ts", None)
+    return normalized
+
 @app.route('/media_proxy')
 def media_proxy():
     """Downloads and serves media files locally."""
@@ -136,12 +438,197 @@ def index():
     unit = client.credentials.get('unit', 0)
     return render_template('index.html', workouts=workouts, unit=unit)
 
+@app.route('/history')
+def history():
+    if not client.credentials.get("token"):
+        return redirect(url_for('settings'))
+
+    history_items = []
+    history_error = None
+    history_source = None
+    unit = client.credentials.get('unit', 0)
+
+    start_arg = request.args.get("start") or request.args.get("startDate") or request.args.get("start_date")
+    end_arg = request.args.get("end") or request.args.get("endDate") or request.args.get("end_date")
+    end_date = _parse_history_date(end_arg) or datetime.now().date()
+    start_date = _parse_history_date(start_arg) or (end_date - timedelta(days=6))
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+    start_date_str = start_date.isoformat()
+    end_date_str = end_date.isoformat()
+
+    try:
+        history_source = f"{client.base_url}/api/mobile/v2/report/userTrainingDataRecord"
+        payload = client.get_training_records(start_date_str, end_date_str)
+        entries = _extract_history_entries(payload)
+        entries = _flatten_history_entries(entries)
+        history_items = _normalize_history_entries(entries, unit)
+    except Exception as e:
+        history_error = str(e)
+
+    return render_template(
+        'history.html',
+        history_items=history_items,
+        history_error=history_error,
+        history_source=history_source,
+        start_date=start_date_str,
+        end_date=end_date_str,
+    )
+
+@app.route('/history/<int:training_id>')
+def history_detail(training_id):
+    if not client.credentials.get("token"):
+        return redirect(url_for('settings'))
+
+    unit = client.credentials.get('unit', 0)
+    unit_label = "lbs" if unit == 1 else "kg"
+    detail = None
+    detail_error = None
+
+    try:
+        detail = client.get_ctt_training_info(training_id)
+        if not detail:
+            detail = client.get_training_info(training_id)
+    except Exception as e:
+        if str(e) == "Unauthorized":
+            client.logout()
+            flash("Session expired. Please login again.", "error")
+            return redirect(url_for('settings'))
+        detail_error = str(e)
+
+    if not detail:
+        detail = {"id": training_id}
+
+    title = _extract_first_value(detail, ["templateName", "name", "title", "workoutName"]) or f"Workout {training_id}"
+    start_value = _extract_first_value(detail, ["startTime", "startTimestamp", "start_time"])
+    end_value = _extract_first_value(detail, ["endTime", "endTimestamp", "end_time"])
+    duration = _format_duration(detail)
+
+    metrics = []
+    if duration:
+        metrics.append({"label": "Duration", "value": duration})
+
+    calories = _extract_first_value(detail, ["calorie", "calories"])
+    if calories is not None:
+        metrics.append({"label": "Calories", "value": f"{_format_number(calories)} kcal"})
+
+    volume = _extract_first_value(detail, ["totalCapacity", "totalVolume", "totalWeight"])
+    if volume is not None:
+        metrics.append({"label": "Volume", "value": f"{_format_number(volume)} {unit_label}"})
+
+    count = _extract_first_value(detail, ["trainingCount", "actionTotalCount", "finishActionCount"])
+    if count is not None:
+        metrics.append({"label": "Exercises", "value": _format_number(count)})
+
+    device_type = _extract_first_value(detail, ["deviceType", "device_type"])
+    device_label = None
+    if device_type is not None:
+        if str(device_type) == "1":
+            device_label = "Gym Monster"
+        elif str(device_type) == "2":
+            device_label = "Gym Pal"
+        else:
+            device_label = str(device_type)
+
+    exercises = (
+        detail.get("cttActionLibraryTrainingInfoList")
+        or detail.get("actionLibraryTrainingInfoList")
+        or detail.get("actionList")
+        or []
+    )
+    exercise_rows = []
+    for exercise in exercises:
+        if not isinstance(exercise, dict):
+            exercise_rows.append({"name": str(exercise), "metrics": [], "sets": []})
+            continue
+
+        name = _extract_first_value(exercise, ["actionLibraryName", "name", "title"]) or "Exercise"
+        row_metrics = []
+        set_rows = []
+
+        sets = _extract_first_value(exercise, ["finishGroupCount", "setCount"])
+        reps_list = exercise.get("finishedReps")
+        if sets is None and isinstance(reps_list, list):
+            sets = len(reps_list)
+        if sets is not None:
+            row_metrics.append({"label": "Sets", "value": _format_number(sets)})
+
+        weight = _extract_first_value(exercise, ["weight", "avgWeight", "maxWeight", "minWeight"])
+        if weight is not None:
+            row_metrics.append({"label": "Weight", "value": f"{_format_number(weight)} {unit_label}"})
+
+        ex_duration = _format_duration(exercise)
+        if ex_duration:
+            row_metrics.append({"label": "Time", "value": ex_duration})
+
+        ex_calories = _extract_first_value(exercise, ["calorie", "calories"])
+        if ex_calories is not None:
+            row_metrics.append({"label": "Calories", "value": f"{_format_number(ex_calories)} kcal"})
+
+        ex_volume = _extract_first_value(exercise, ["totalCapacity", "capacity"])
+        if ex_volume is not None:
+            row_metrics.append({"label": "Volume", "value": f"{_format_number(ex_volume)} {unit_label}"})
+
+        if isinstance(reps_list, list):
+            for rep in reps_list:
+                if not isinstance(rep, dict):
+                    continue
+                reps_done = _extract_first_value(rep, ["finishedCount", "reps", "count"])
+                reps_target = _extract_first_value(rep, ["targetCount", "target", "targetTrainingCount"])
+                reps_display = _format_number(reps_done) if reps_done is not None else "-"
+                if reps_target is not None:
+                    reps_display = f"{reps_display}/{_format_number(reps_target)}"
+
+                time_display = _format_seconds_value(rep.get("time"))
+                avg_weight = _extract_first_value(rep, ["avgWeight", "weight"])
+                weight_detail_summary = None
+                if avg_weight is None:
+                    weight_detail_summary = _summarize_weight_detail(rep.get("weightDetail"))
+                    avg_weight = weight_detail_summary
+                if avg_weight is not None:
+                    avg_weight = f"{_format_number(avg_weight)} {unit_label}"
+
+                capacity = _extract_first_value(rep, ["capacity", "totalCapacity"])
+                if capacity is not None:
+                    capacity = f"{_format_number(capacity)} {unit_label}"
+
+                set_rows.append({
+                    "index": rep.get("ix"),
+                    "reps": reps_display,
+                    "time": time_display,
+                    "avg_weight": avg_weight,
+                    "weight_detail": f"{weight_detail_summary} {unit_label}" if weight_detail_summary else None,
+                    "capacity": capacity,
+                })
+
+        exercise_rows.append({
+            "name": name,
+            "metrics": row_metrics,
+            "sets": set_rows,
+        })
+
+    return render_template(
+        'history_detail.html',
+        training_id=training_id,
+        title=title,
+        start_time=_format_history_datetime(start_value),
+        end_time=_format_history_datetime(end_value),
+        device=device_label,
+        metrics=metrics,
+        exercises=exercise_rows,
+        raw_json=json.dumps(detail, indent=2),
+        detail_error=detail_error,
+    )
+
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
     if request.method == 'POST':
         # Manual config save
         device_type = int(request.form.get('device_type', client.credentials.get('device_type', 1)))
         allow_monster_moves = bool(request.form.get('allow_monster_moves'))
+        history_url = request.form.get('workout_history_url', '')
+        history_key = request.form.get('workout_history_api_key', '')
+        history_header = request.form.get('workout_history_api_key_header', '')
         client.save_config(
             request.form['user_id'], 
             request.form['token'], 
@@ -150,6 +637,9 @@ def settings():
             request.form.get('custom_instruction', ''),
             device_type,
             allow_monster_moves,
+            history_url,
+            history_key,
+            history_header,
         )
         flash("Settings saved!", "success")
         return redirect(url_for('index'))

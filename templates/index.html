@@ -1,18 +1,66 @@
 {% extends "layout.html" %}
 {% block content %}
 <!-- Workouts Section -->
-<div class="flex justify-between items-center mb-6">
+<div class="flex flex-wrap justify-between items-center gap-4 mb-6">
     <h1 class="text-3xl font-bold text-white">My Workouts</h1>
-    <a href="/create" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow hover:shadow-lg transition">New Workout</a>
+    <div class="flex items-center gap-4">
+        <button id="open-json-modal" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded shadow transition text-sm">JSON</button>
+        <label class="flex items-center gap-2 text-sm text-gray-300">
+            <input type="checkbox" id="condensed-toggle" class="h-4 w-4">
+            Condensed view
+        </label>
+        <a href="/create" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow hover:shadow-lg transition">New Workout</a>
+    </div>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+<div class="flex flex-wrap items-center gap-3 mb-6">
+    <div class="relative flex-1 min-w-[220px]">
+        <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+            <svg class="w-4 h-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+            </svg>
+        </div>
+        <input type="text" id="workout-filter" 
+               class="block w-full p-3 pl-10 text-sm border rounded-lg bg-gray-800 border-gray-700 placeholder-gray-500 text-white focus:ring-blue-500 focus:border-blue-500" 
+               placeholder="Filter workouts by name...">
+    </div>
+    <label class="flex items-center gap-2 text-xs text-gray-400">
+        <input type="checkbox" id="workout-filter-exercises" class="h-4 w-4">
+        Include exercises
+    </label>
+</div>
+
+<div id="workouts-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
     {% for w in workouts %}
-    <div class="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 relative group cursor-move hover:border-blue-500 transition-colors duration-200" 
+    {% set ns = namespace(names=[], images=[]) %}
+    {% for group in w.actionInfoList or [] %}
+        {% if group[0] is defined and group[0].img %}
+            {% set ns.images = ns.images + [group[0].img] %}
+        {% endif %}
+        {% for action in group %}
+            {% set ex_name = action.actionName or action.name or action.title or action.actionNameEn or action.actionNameCn %}
+            {% if ex_name %}
+                {% set ns.names = ns.names + [ex_name] %}
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+    <div class="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 relative group cursor-move hover:border-blue-500 transition-colors duration-200 selectable-workout" 
          draggable="true" 
          ondragstart="drag(event)" 
+         data-id="{{ w.id }}"
          data-code="{{ w.code }}" 
-         data-name="{{ w.name }}">
+         data-name="{{ w.name }}"
+         data-title="{{ w.name | lower }}"
+         data-exercises="{{ (ns.names | join(' ')) | lower }}"
+         data-exercise-list="{{ ns.names | tojson | forceescape }}"
+         data-images="{{ ns.images | tojson | forceescape }}"
+         data-action-info="{{ w.actionInfoList | tojson | forceescape }}"
+         data-volume="{{ w.totalCapacity }}"
+         data-duration="{{ w.durationMinute }}"
+         data-action-num="{{ w.actionNum }}"
+         data-volume-unit="{{ 'lbs' if unit == 1 else 'kg' }}"
+         data-workout-item="true"
+         data-workout-select="true">
         
         <div class="p-5">
             <div class="flex justify-between items-start">
@@ -43,7 +91,7 @@
 </div>
 
 <!-- Instructions Section -->
-<div class="bg-gray-800 rounded-lg p-6 mb-8 border border-gray-700 shadow-lg">
+<div id="schedule-help" class="bg-gray-800 rounded-lg p-6 mb-8 border border-gray-700 shadow-lg">
     <div class="flex items-start gap-4">
         <div class="bg-blue-600/20 p-3 rounded-full text-blue-400">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -54,7 +102,7 @@
             <div>
                 <h3 class="text-lg font-bold text-white mb-1">How to Schedule</h3>
                 <p class="text-gray-400 text-sm leading-relaxed">
-                    <span class="text-white font-semibold">Add:</span> Drag any workout card from the list above and drop it onto a date.
+                    <span class="text-white font-semibold">Add:</span> Drag any workout card from the list above and drop it onto a date, or click a workout to select it and then click a date on the calendar.
                     <br>
                     <span class="text-white font-semibold">Move:</span> Drag a scheduled workout from one date to another to reschedule it.
                     <br>
@@ -76,32 +124,128 @@
     </div>
 </div>
 
-<!-- Calendar Section -->
-<div class="mb-10">
-    <div class="flex justify-between items-center mb-4">
-        <h2 class="text-2xl font-bold text-white flex items-center gap-2">
-            <span>📅</span> Training Calendar
-        </h2>
-        <div class="flex items-center space-x-4 bg-gray-800 p-2 rounded-lg">
-            <button id="prevMonth" class="text-gray-400 hover:text-white px-2 py-1 hover:bg-gray-700 rounded transition">
-                &lt; Prev
-            </button>
-            <span id="currentMonthLabel" class="text-xl font-semibold text-white min-w-[150px] text-center"></span>
-            <button id="nextMonth" class="text-gray-400 hover:text-white px-2 py-1 hover:bg-gray-700 rounded transition">
-                Next &gt;
-            </button>
+<!-- Schedule Layout -->
+<div id="schedule-layout" class="mb-10">
+    <aside id="condensed-sidebar" class="hidden">
+        <div class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700 h-full">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-bold text-white">Workouts</h3>
+                <span class="text-xs text-gray-400">{{ workouts|length }} total</span>
+            </div>
+            <div id="workouts-condensed-list" class="space-y-1 overflow-y-auto max-h-[70vh] pr-1">
+                {% for w in workouts %}
+                {% set ns = namespace(names=[], images=[]) %}
+                {% for group in w.actionInfoList or [] %}
+                    {% if group[0] is defined and group[0].img %}
+                        {% set ns.images = ns.images + [group[0].img] %}
+                    {% endif %}
+                    {% for action in group %}
+                        {% set ex_name = action.actionName or action.name or action.title or action.actionNameEn or action.actionNameCn %}
+                        {% if ex_name %}
+                            {% set ns.names = ns.names + [ex_name] %}
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+                <div class="selectable-workout bg-gray-900/40 border border-gray-700/80 rounded-md px-2 py-2 text-sm text-gray-200 truncate cursor-pointer hover:border-blue-500 transition-colors" 
+                     draggable="true"
+                     ondragstart="drag(event)"
+                     data-id="{{ w.id }}"
+                     data-code="{{ w.code }}"
+                     data-name="{{ w.name }}"
+                     data-title="{{ w.name | lower }}"
+                     data-exercises="{{ (ns.names | join(' ')) | lower }}"
+                     data-exercise-list="{{ ns.names | tojson | forceescape }}"
+                     data-images="{{ ns.images | tojson | forceescape }}"
+                     data-action-info="{{ w.actionInfoList | tojson | forceescape }}"
+                     data-volume="{{ w.totalCapacity }}"
+                     data-duration="{{ w.durationMinute }}"
+                     data-action-num="{{ w.actionNum }}"
+                     data-volume-unit="{{ 'lbs' if unit == 1 else 'kg' }}"
+                     data-workout-item="true"
+                     data-workout-select="true"
+                     title="{{ w.name }}">
+                    {{ w.name }}
+                </div>
+                {% else %}
+                <p class="text-gray-500 text-sm">No workouts found. Create one to get started!</p>
+                {% endfor %}
+            </div>
         </div>
-    </div>
-    
-    <div class="bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-700">
-        <!-- Weekday Headers -->
-        <div class="grid grid-cols-7 gap-2 mb-2 text-center text-gray-400 font-bold uppercase text-sm tracking-wider">
-            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+    </aside>
+
+    <div id="calendar-section" class="flex-1">
+        <div class="flex flex-wrap justify-between items-center gap-3 mb-2">
+            <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                <span>📅</span> Training Calendar
+            </h2>
+            <div class="flex items-center space-x-4 bg-gray-800 p-2 rounded-lg">
+                <button id="prevMonth" class="text-gray-400 hover:text-white px-2 py-1 hover:bg-gray-700 rounded transition">
+                    &lt; Prev
+                </button>
+                <span id="currentMonthLabel" class="text-xl font-semibold text-white min-w-[150px] text-center"></span>
+                <button id="nextMonth" class="text-gray-400 hover:text-white px-2 py-1 hover:bg-gray-700 rounded transition">
+                    Next &gt;
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 mb-4 text-xs">
+            <span id="selected-workout-hint" class="text-gray-400">Click a workout to select it, then click a date to add it.</span>
+            <span id="selected-workout-chip" class="hidden items-center gap-2 bg-blue-900/40 text-blue-200 border border-blue-800/60 px-2 py-1 rounded">
+                Selected: <span id="selected-workout-name" class="font-semibold text-white"></span>
+            </span>
+            <button id="clear-selected-workout" class="hidden text-gray-400 hover:text-white">Clear</button>
+        </div>
+        <div id="selected-workout-detail" class="hidden bg-gray-900/40 border border-gray-700 rounded-lg p-3 mb-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <div class="text-[10px] text-gray-400 uppercase tracking-wide">Selected workout</div>
+                    <div id="selected-workout-detail-name" class="text-white font-bold text-lg"></div>
+                    <div id="selected-workout-detail-meta" class="text-xs text-gray-400 mt-1"></div>
+                </div>
+                <div id="selected-workout-detail-images" class="flex flex-wrap gap-1 justify-end"></div>
+            </div>
+            <div id="selected-workout-detail-exercises" class="mt-2 text-xs text-gray-400 max-h-24 overflow-y-auto"></div>
         </div>
         
-        <!-- Calendar Grid -->
-        <div id="calendarGrid" class="grid grid-cols-7 gap-2 auto-rows-fr">
-            <!-- Calendar days will be injected here -->
+        <div class="bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-700">
+            <!-- Weekday Headers -->
+            <div class="grid grid-cols-7 gap-2 mb-2 text-center text-gray-400 font-bold uppercase text-sm tracking-wider">
+                <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+            </div>
+            
+            <!-- Calendar Grid -->
+            <div id="calendarGrid" class="grid grid-cols-7 gap-2 auto-rows-fr">
+                <!-- Calendar days will be injected here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="json-export-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50">
+    <div class="bg-gray-800 p-6 rounded-lg w-11/12 max-w-4xl border border-gray-700 shadow-2xl h-5/6 flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-white">Workout JSON Export</h3>
+            <button id="close-json-modal" class="text-gray-400 hover:text-white px-2 py-1">Close</button>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 overflow-hidden">
+            <div class="flex flex-col gap-2 overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-sm font-semibold text-white">All workouts</h4>
+                    <button id="copy-workouts-json" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded border border-gray-600 transition">Copy</button>
+                </div>
+                <textarea id="workouts-json" class="w-full flex-grow bg-gray-900 text-gray-300 p-3 rounded border border-gray-700 font-mono text-xs focus:border-blue-500 outline-none" readonly></textarea>
+            </div>
+            <div class="flex flex-col gap-2 overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-sm font-semibold text-white">Calendar</h4>
+                    <button id="copy-calendar-json" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded border border-gray-600 transition">Copy</button>
+                </div>
+                <textarea id="calendar-json" class="w-full flex-grow bg-gray-900 text-gray-300 p-3 rounded border border-gray-700 font-mono text-xs focus:border-blue-500 outline-none" readonly></textarea>
+            </div>
+        </div>
+        <div class="mt-4 text-xs text-gray-500">
+            Exports include workout title, ID, code, and exercise list. Calendar export covers the currently viewed month.
         </div>
     </div>
 </div>
@@ -145,10 +289,35 @@
     .workout-pill:hover .delete-schedule-btn {
         opacity: 1;
     }
+    .selectable-workout {
+        transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+    }
+    .selected-workout {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.4);
+        background-color: rgba(59, 130, 246, 0.12);
+    }
+    .calendar-select-mode .calendar-day {
+        cursor: pointer;
+    }
+    .calendar-select-mode .calendar-day:hover {
+        border-color: #60a5fa;
+        background-color: rgba(59, 130, 246, 0.12);
+    }
 </style>
 
 <script>
     let currentDate = new Date();
+    let selectedWorkout = null;
+    let currentCalendarData = [];
+
+    const condensedToggle = document.getElementById('condensed-toggle');
+    const workoutsGrid = document.getElementById('workouts-grid');
+    const condensedSidebar = document.getElementById('condensed-sidebar');
+    const scheduleHelp = document.getElementById('schedule-help');
+    const scheduleLayout = document.getElementById('schedule-layout');
+    const workoutFilterInput = document.getElementById('workout-filter');
+    const workoutFilterExercises = document.getElementById('workout-filter-exercises');
     
     function initCalendar() {
         renderCalendarHeader();
@@ -166,6 +335,117 @@
         return `${year}-${month}`;
     }
 
+    function getTodayString() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function isPastDate(dateStr) {
+        return dateStr < getTodayString();
+    }
+
+    function safeParseJson(value, fallback) {
+        if (!value) return fallback;
+        try {
+            return JSON.parse(value);
+        } catch (error) {
+            return fallback;
+        }
+    }
+
+    function extractExerciseNamesFromActionInfo(actionInfo) {
+        const names = [];
+        const seen = new Set();
+        if (!Array.isArray(actionInfo)) return names;
+
+        const addName = (value) => {
+            if (!value || typeof value !== 'string') return;
+            const trimmed = value.trim();
+            if (!trimmed || seen.has(trimmed)) return;
+            seen.add(trimmed);
+            names.push(trimmed);
+        };
+
+        actionInfo.forEach(group => {
+            if (Array.isArray(group)) {
+                group.forEach(action => {
+                    if (!action || typeof action !== 'object') return;
+                    addName(action.actionName);
+                    addName(action.name);
+                    addName(action.title);
+                    addName(action.actionNameEn);
+                    addName(action.actionNameCn);
+                    addName(action.actionNameEN);
+                    addName(action.actionNameCN);
+                });
+            } else if (group && typeof group === 'object') {
+                addName(group.actionName);
+                addName(group.name);
+                addName(group.title);
+                addName(group.actionNameEn);
+                addName(group.actionNameCn);
+                addName(group.actionNameEN);
+                addName(group.actionNameCN);
+            }
+        });
+
+        return names;
+    }
+
+    function getExerciseListFromItem(item) {
+        if (!item) return [];
+        const fromDataset = safeParseJson(item.dataset.exerciseList, []);
+        if (Array.isArray(fromDataset) && fromDataset.length > 0) {
+            return fromDataset;
+        }
+
+        const actionInfo = safeParseJson(item.dataset.actionInfo, []);
+        const extracted = extractExerciseNamesFromActionInfo(actionInfo);
+        if (extracted.length > 0) {
+            item.dataset.exerciseList = JSON.stringify(extracted);
+            item.dataset.exercises = extracted.join(' ').toLowerCase();
+        }
+        return extracted;
+    }
+
+    function getExerciseSearchText(item) {
+        if (!item) return '';
+        const existing = item.dataset.exercises || '';
+        if (existing.trim()) return existing;
+        const extracted = getExerciseListFromItem(item);
+        if (Array.isArray(extracted) && extracted.length > 0) {
+            return extracted.join(' ').toLowerCase();
+        }
+        return '';
+    }
+
+    function getWorkoutItems() {
+        return Array.from(document.querySelectorAll('[data-workout-item="true"]'));
+    }
+
+    function getWorkoutItemByCode(code) {
+        if (!code) return null;
+        return getWorkoutItems().find(item => item.dataset.code === code) || null;
+    }
+
+    function applyWorkoutFilter() {
+        if (!workoutFilterInput) return;
+        const term = workoutFilterInput.value.trim().toLowerCase();
+        const includeExercises = workoutFilterExercises && workoutFilterExercises.checked;
+        const items = getWorkoutItems();
+
+        items.forEach(item => {
+            const title = item.dataset.title || '';
+            const exercises = includeExercises ? getExerciseSearchText(item) : '';
+            const haystack = `${title} ${exercises}`.trim();
+            const matches = term === '' || haystack.includes(term);
+            item.classList.toggle('hidden', !matches);
+        });
+    }
+
     async function fetchCalendarData() {
         const dateStr = getMonthString(currentDate);
         const grid = document.getElementById('calendarGrid');
@@ -178,6 +458,7 @@
                 return;
             }
             const data = await response.json();
+            currentCalendarData = Array.isArray(data) ? data : [];
             renderCalendarGrid(data);
         } catch (error) {
             console.error('Error fetching calendar:', error);
@@ -213,6 +494,7 @@
             cell.setAttribute('ondrop', 'drop(event)');
             cell.setAttribute('ondragleave', 'dragLeave(event)');
             cell.dataset.date = day.date;
+            cell.addEventListener('click', (event) => handleCalendarClick(event, day.date));
 
             // Date number
             const dateNum = new Date(day.date).getDate();
@@ -302,6 +584,279 @@
         ev.currentTarget.classList.remove('drag-over');
     }
 
+    function setSelectedWorkoutFromElement(element) {
+        const code = element.dataset.code;
+        if (!code) return;
+        if (selectedWorkout && selectedWorkout.code === code) {
+            clearSelectedWorkout();
+            return;
+        }
+        selectedWorkout = {
+            code: code,
+            name: element.dataset.name || 'Workout'
+        };
+        updateSelectedWorkoutUI();
+    }
+
+    function clearSelectedWorkout() {
+        selectedWorkout = null;
+        updateSelectedWorkoutUI();
+    }
+
+    function updateSelectedWorkoutUI() {
+        const items = document.querySelectorAll('[data-workout-select]');
+        items.forEach(item => {
+            const isSelected = selectedWorkout && item.dataset.code === selectedWorkout.code;
+            item.classList.toggle('selected-workout', isSelected);
+            item.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        });
+
+        const chip = document.getElementById('selected-workout-chip');
+        const name = document.getElementById('selected-workout-name');
+        const clearBtn = document.getElementById('clear-selected-workout');
+
+        if (selectedWorkout) {
+            name.textContent = selectedWorkout.name || 'Workout';
+            chip.classList.remove('hidden');
+            clearBtn.classList.remove('hidden');
+        } else {
+            chip.classList.add('hidden');
+            clearBtn.classList.add('hidden');
+        }
+
+        const calendarGrid = document.getElementById('calendarGrid');
+        if (calendarGrid) {
+            calendarGrid.classList.toggle('calendar-select-mode', Boolean(selectedWorkout));
+        }
+
+        updateSelectedWorkoutDetail();
+    }
+
+    function updateSelectedWorkoutDetail() {
+        const panel = document.getElementById('selected-workout-detail');
+        if (!panel) return;
+        if (!selectedWorkout) {
+            panel.classList.add('hidden');
+            return;
+        }
+
+        const item = getWorkoutItemByCode(selectedWorkout.code);
+        if (!item) {
+            panel.classList.add('hidden');
+            return;
+        }
+
+        const nameEl = document.getElementById('selected-workout-detail-name');
+        const metaEl = document.getElementById('selected-workout-detail-meta');
+        const imagesEl = document.getElementById('selected-workout-detail-images');
+        const exercisesEl = document.getElementById('selected-workout-detail-exercises');
+        if (!nameEl || !metaEl || !imagesEl || !exercisesEl) return;
+
+        const name = item.dataset.name || selectedWorkout.name || 'Workout';
+        nameEl.textContent = name;
+
+        const parts = [];
+        const duration = item.dataset.duration;
+        if (duration) {
+            parts.push(`Duration: ~${duration} min`);
+        }
+        const volume = item.dataset.volume;
+        const volumeUnit = item.dataset.volumeUnit || '';
+        if (volume) {
+            parts.push(`Volume: ${volume} ${volumeUnit}`.trim());
+        }
+        const actionNum = item.dataset.actionNum;
+        if (actionNum) {
+            parts.push(`Exercises: ${actionNum}`);
+        }
+        metaEl.textContent = parts.join(' | ');
+
+        const images = safeParseJson(item.dataset.images, []);
+        imagesEl.innerHTML = '';
+        if (Array.isArray(images) && images.length > 0) {
+            const maxImages = 8;
+            images.slice(0, maxImages).forEach(src => {
+                const img = document.createElement('img');
+                img.src = src;
+                img.alt = name;
+                img.className = 'h-10 w-10 rounded object-cover border border-gray-700';
+                imagesEl.appendChild(img);
+            });
+            if (images.length > maxImages) {
+                const more = document.createElement('span');
+                more.className = 'h-10 min-w-[2.5rem] rounded border border-gray-700 text-xs text-gray-300 flex items-center justify-center px-2';
+                more.textContent = `+${images.length - maxImages}`;
+                imagesEl.appendChild(more);
+            }
+        }
+
+        const exerciseList = getExerciseListFromItem(item);
+        if (Array.isArray(exerciseList) && exerciseList.length > 0) {
+            exercisesEl.textContent = `Exercises: ${exerciseList.join(', ')}`;
+        } else {
+            exercisesEl.textContent = 'Exercises list unavailable.';
+            console.log('[Workout selection] Missing exercise list', {
+                code: selectedWorkout.code,
+                name: selectedWorkout.name,
+                dataset: item.dataset
+            });
+        }
+
+        panel.classList.remove('hidden');
+    }
+
+    function buildWorkoutExport() {
+        const items = getWorkoutItems();
+        const byCode = new Map();
+        items.forEach(item => {
+            const code = item.dataset.code;
+            if (!code || byCode.has(code)) return;
+            const exercises = getExerciseListFromItem(item);
+            byCode.set(code, {
+                id: item.dataset.id || null,
+                code: code,
+                title: item.dataset.name || item.dataset.title || 'Workout',
+                exercises: Array.isArray(exercises) ? exercises : []
+            });
+        });
+        return Array.from(byCode.values());
+    }
+
+    function extractCalendarItems(list, type) {
+        if (!Array.isArray(list)) return [];
+        return list.map(item => ({
+            id: item.id || item.planId || item.trainingPlanId || item.trainingId || null,
+            code: item.code || item.templateCode || item.planCode || item.trainingPlanCode || null,
+            title: item.title || item.exclusivePlanName || item.planName || item.workoutName || item.templateName || 'Workout',
+            type: type,
+            status: item.status || item.state || null,
+            isProgram: item.isReservation === false
+        }));
+    }
+
+    function buildCalendarExport() {
+        const month = getMonthString(currentDate);
+        const days = (currentCalendarData || []).map(day => {
+            const scheduled = extractCalendarItems(day.trainingPlanList, 'scheduled');
+
+            const recordSources = [
+                day.trainingRecordList,
+                day.trainingRecords,
+                day.trainingHistoryList,
+                day.recordList,
+                day.historyList,
+                day.records
+            ];
+            let recorded = [];
+            recordSources.forEach(list => {
+                if (Array.isArray(list) && list.length > 0) {
+                    recorded = recorded.concat(extractCalendarItems(list, 'recorded'));
+                }
+            });
+
+            return {
+                date: day.date,
+                items: scheduled.concat(recorded)
+            };
+        });
+
+        return {
+            month: month,
+            generatedAt: new Date().toISOString(),
+            days: days
+        };
+    }
+
+    function refreshJsonExport() {
+        const workoutsTextarea = document.getElementById('workouts-json');
+        const calendarTextarea = document.getElementById('calendar-json');
+        if (workoutsTextarea) {
+            workoutsTextarea.value = JSON.stringify(buildWorkoutExport(), null, 2);
+        }
+        if (calendarTextarea) {
+            calendarTextarea.value = JSON.stringify(buildCalendarExport(), null, 2);
+        }
+    }
+
+    function copyTextareaValue(textareaId, successMessage) {
+        const textarea = document.getElementById(textareaId);
+        if (!textarea) return;
+        navigator.clipboard.writeText(textarea.value || '').then(() => {
+            if (successMessage) {
+                console.log(successMessage);
+            }
+        });
+    }
+
+    function openJsonModal() {
+        const modal = document.getElementById('json-export-modal');
+        if (!modal) return;
+        refreshJsonExport();
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeJsonModal() {
+        const modal = document.getElementById('json-export-modal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    function handleWorkoutSelection(event) {
+        const target = event.target.closest('[data-workout-select]');
+        if (!target) return;
+        if (event.target.closest('a')) return;
+        setSelectedWorkoutFromElement(target);
+    }
+
+    function handleCalendarClick(event, targetDate) {
+        if (!selectedWorkout) return;
+        if (!targetDate) return;
+        if (event.target.closest('.workout-pill')) return;
+        if (isPastDate(targetDate)) {
+            alert('Cannot schedule workouts to a past date.');
+            return;
+        }
+        addWorkoutToDate(targetDate, selectedWorkout.code);
+    }
+
+    async function addWorkoutToDate(targetDate, code) {
+        try {
+            const response = await fetch('/api/schedule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date: targetDate,
+                    templateCode: code,
+                    status: 1 // Add
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                fetchCalendarData();
+            } else {
+                alert('Failed to schedule workout: ' + (result.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error scheduling:', error);
+            alert('Error scheduling workout');
+        }
+    }
+
+    function setCondensedView(isCondensed) {
+        if (!scheduleLayout) return;
+        scheduleLayout.classList.toggle('grid', isCondensed);
+        scheduleLayout.classList.toggle('grid-cols-1', isCondensed);
+        scheduleLayout.classList.toggle('lg:grid-cols-[260px_1fr]', isCondensed);
+        scheduleLayout.classList.toggle('gap-6', isCondensed);
+        scheduleLayout.classList.toggle('items-start', isCondensed);
+        if (workoutsGrid) workoutsGrid.classList.toggle('hidden', isCondensed);
+        if (scheduleHelp) scheduleHelp.classList.toggle('hidden', isCondensed);
+        if (condensedSidebar) condensedSidebar.classList.toggle('hidden', !isCondensed);
+    }
+
     async function drop(ev) {
         ev.preventDefault();
         ev.currentTarget.classList.remove('drag-over');
@@ -315,13 +870,7 @@
         if (!targetDate || !data.code) return;
 
         // Prevent scheduling in the past
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const todayStr = `${year}-${month}-${day}`;
-
-        if (targetDate < todayStr) {
+        if (isPastDate(targetDate)) {
             alert('Cannot schedule or move workouts to a past date.');
             return;
         }
@@ -372,27 +921,7 @@
 
         } else {
             // New schedule
-            try {
-                const response = await fetch('/api/schedule', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        date: targetDate,
-                        templateCode: data.code,
-                        status: 1 // Add
-                    })
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    fetchCalendarData(); // Reload calendar
-                } else {
-                    alert('Failed to schedule workout: ' + (result.error || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Error scheduling:', error);
-                alert('Error scheduling workout');
-            }
+            addWorkoutToDate(targetDate, data.code);
         }
     }
 
@@ -435,6 +964,65 @@
     });
 
     // Initialize
+    if (condensedToggle) {
+        condensedToggle.addEventListener('change', () => {
+            setCondensedView(condensedToggle.checked);
+        });
+        setCondensedView(condensedToggle.checked);
+    }
+
+    const openJsonButton = document.getElementById('open-json-modal');
+    if (openJsonButton) {
+        openJsonButton.addEventListener('click', openJsonModal);
+    }
+
+    const closeJsonButton = document.getElementById('close-json-modal');
+    if (closeJsonButton) {
+        closeJsonButton.addEventListener('click', closeJsonModal);
+    }
+
+    const jsonModal = document.getElementById('json-export-modal');
+    if (jsonModal) {
+        jsonModal.addEventListener('click', (event) => {
+            if (event.target === jsonModal) {
+                closeJsonModal();
+            }
+        });
+    }
+
+    const copyWorkoutsButton = document.getElementById('copy-workouts-json');
+    if (copyWorkoutsButton) {
+        copyWorkoutsButton.addEventListener('click', () => copyTextareaValue('workouts-json'));
+    }
+
+    const copyCalendarButton = document.getElementById('copy-calendar-json');
+    if (copyCalendarButton) {
+        copyCalendarButton.addEventListener('click', () => copyTextareaValue('calendar-json'));
+    }
+
+    if (workoutFilterInput) {
+        workoutFilterInput.addEventListener('input', applyWorkoutFilter);
+    }
+    if (workoutFilterExercises) {
+        workoutFilterExercises.addEventListener('change', applyWorkoutFilter);
+    }
+
+    if (workoutsGrid) {
+        workoutsGrid.addEventListener('click', handleWorkoutSelection);
+    }
+
+    const condensedList = document.getElementById('workouts-condensed-list');
+    if (condensedList) {
+        condensedList.addEventListener('click', handleWorkoutSelection);
+    }
+
+    const clearSelectionButton = document.getElementById('clear-selected-workout');
+    if (clearSelectionButton) {
+        clearSelectionButton.addEventListener('click', clearSelectedWorkout);
+    }
+
+    applyWorkoutFilter();
+    updateSelectedWorkoutUI();
     initCalendar();
 </script>
 {% endblock %}

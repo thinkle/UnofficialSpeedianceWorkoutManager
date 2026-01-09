@@ -1,0 +1,108 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="flex flex-col gap-4 mb-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-white">{{ title }}</h1>
+            <p class="text-xs text-gray-500 mt-1">Training ID: {{ training_id }}</p>
+        </div>
+        <a href="/history" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded shadow transition">Back to History</a>
+    </div>
+</div>
+
+{% if detail_error %}
+    <div class="p-4 rounded bg-red-900/40 text-red-200 border border-red-700 mb-6">
+        Failed to load details: {{ detail_error }}
+    </div>
+{% endif %}
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="md:col-span-2 bg-gray-800 rounded-lg border border-gray-700 p-5">
+        <h2 class="text-xl font-bold text-white mb-3">Overview</h2>
+        <div class="text-sm text-gray-300 space-y-2">
+            {% if start_time %}
+                <p>Start: <span class="text-gray-400">{{ start_time }}</span></p>
+            {% endif %}
+            {% if end_time %}
+                <p>End: <span class="text-gray-400">{{ end_time }}</span></p>
+            {% endif %}
+            {% if device %}
+                <p>Device: <span class="text-gray-400">{{ device }}</span></p>
+            {% endif %}
+        </div>
+        {% if metrics %}
+            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                {% for metric in metrics %}
+                    <div class="bg-gray-900 border border-gray-700 rounded px-3 py-2">
+                        <span class="text-gray-400">{{ metric.label }}</span>
+                        <div class="text-white font-semibold">{{ metric.value }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-5">
+        <h2 class="text-xl font-bold text-white mb-3">Tips</h2>
+        <p class="text-sm text-gray-400">
+            Use the &lt;/&gt; button in the bottom-right to inspect the raw API response for this request.
+        </p>
+    </div>
+</div>
+
+<div class="bg-gray-800 rounded-lg border border-gray-700 p-5 mb-8">
+    <h2 class="text-xl font-bold text-white mb-3">Exercises</h2>
+    {% if exercises %}
+        <div class="space-y-4">
+            {% for exercise in exercises %}
+                <div class="bg-gray-900 border border-gray-700 rounded p-4">
+                    <div class="text-white font-semibold">{{ exercise.name }}</div>
+                    {% if exercise.metrics %}
+                        <div class="mt-2 text-sm text-gray-400 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {% for metric in exercise.metrics %}
+                                <div>{{ metric.label }}: {{ metric.value }}</div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-sm text-gray-500 mt-2">No metrics available.</p>
+                    {% endif %}
+                    {% if exercise.sets %}
+                        <details class="mt-3 text-xs text-gray-400">
+                            <summary class="cursor-pointer hover:text-gray-200">Set details</summary>
+                            <div class="mt-2 grid grid-cols-1 gap-2">
+                                {% for set in exercise.sets %}
+                                    <div class="bg-gray-800 border border-gray-700 rounded px-3 py-2">
+                                        <div class="text-gray-200 font-semibold">Set {{ (set.index + 1) if set.index is not none else loop.index }}</div>
+                                        <div class="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                                            <div>Reps: {{ set.reps }}</div>
+                                            {% if set.time %}
+                                                <div>Time: {{ set.time }}</div>
+                                            {% endif %}
+                                            {% if set.avg_weight %}
+                                                <div>Avg Weight: {{ set.avg_weight }}</div>
+                                            {% endif %}
+                                            {% if set.capacity %}
+                                                <div>Volume: {{ set.capacity }}</div>
+                                            {% endif %}
+                                            {% if set.weight_detail %}
+                                                <div>Weight Range: {{ set.weight_detail }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </details>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-sm text-gray-500">No exercise detail list found in the response.</p>
+    {% endif %}
+</div>
+
+<details class="text-xs text-gray-400">
+    <summary class="cursor-pointer hover:text-gray-200">Raw payload</summary>
+    <pre class="mt-2 bg-gray-900 border border-gray-700 rounded p-3 overflow-auto max-h-96">{{ raw_json }}</pre>
+</details>
+{% endblock %}

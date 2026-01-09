@@ -1,0 +1,67 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="flex flex-col gap-3 mb-6">
+    <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-white">Recent Workouts</h1>
+            {% if history_source %}
+                <p class="text-xs text-gray-500 mt-1">Source: {{ history_source }}</p>
+            {% endif %}
+        </div>
+        <form method="get" class="flex flex-wrap items-end gap-2 text-xs">
+            <div class="flex flex-col">
+                <label class="text-gray-400 mb-1">Start</label>
+                <input type="date" name="start" value="{{ start_date }}" class="bg-gray-800 border border-gray-700 text-gray-100 rounded px-2 py-1">
+            </div>
+            <div class="flex flex-col">
+                <label class="text-gray-400 mb-1">End</label>
+                <input type="date" name="end" value="{{ end_date }}" class="bg-gray-800 border border-gray-700 text-gray-100 rounded px-2 py-1">
+            </div>
+            <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded shadow transition">Load</button>
+        </form>
+    </div>
+    <p class="text-xs text-gray-500">
+        Tip: use the &lt;/&gt; button in the bottom-right to inspect the full API response while iterating.
+    </p>
+</div>
+
+{% if history_error %}
+    <div class="p-4 rounded bg-red-900/40 text-red-200 border border-red-700 mb-6">
+        Failed to load history: {{ history_error }}
+    </div>
+{% endif %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    {% for item in history_items %}
+    <div class="bg-gray-800 rounded-lg border border-gray-700 p-5">
+        <div class="flex justify-between items-start gap-3">
+            <h3 class="text-xl font-bold text-white truncate">{{ item.title }}</h3>
+            {% if item.performed_at %}
+                <span class="text-xs text-gray-400 bg-gray-900 border border-gray-700 rounded px-2 py-1 whitespace-nowrap">{{ item.performed_at }}</span>
+            {% endif %}
+        </div>
+        {% if item.device %}
+            <p class="text-sm text-gray-400 mt-2">Device: {{ item.device }}</p>
+        {% endif %}
+        {% if item.metrics %}
+            <div class="text-sm text-gray-400 mt-2 space-y-1">
+                {% for metric in item.metrics %}
+                    <p>{{ metric.label }}: {{ metric.value }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+        {% if item.detail_id %}
+            <div class="mt-3">
+                <a href="/history/{{ item.detail_id }}" class="text-sm text-blue-400 hover:text-blue-300">View details</a>
+            </div>
+        {% endif %}
+        <details class="mt-4 text-xs text-gray-400">
+            <summary class="cursor-pointer hover:text-gray-200">Raw payload</summary>
+            <pre class="mt-2 bg-gray-900 border border-gray-700 rounded p-3 overflow-auto max-h-64">{{ item.raw_json }}</pre>
+        </details>
+    </div>
+    {% else %}
+    <p class="text-gray-500 col-span-full text-center py-10">No workouts found.</p>
+    {% endfor %}
+</div>
+{% endblock %}

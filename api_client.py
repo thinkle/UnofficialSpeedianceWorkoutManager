@@ -111,7 +111,22 @@ class SpeedianceClient:
             "allow_monster_moves": False,
         }
 
-    def save_config(self, user_id, token, region="Global", unit=0, custom_instruction="", device_type=1, allow_monster_moves=False):
+    def save_config(
+        self,
+        user_id,
+        token,
+        region="Global",
+        unit=0,
+        custom_instruction="",
+        device_type=1,
+        allow_monster_moves=False,
+        workout_history_url=None,
+        workout_history_api_key=None,
+        workout_history_api_key_header=None,
+    ):
+        history_url = workout_history_url if workout_history_url is not None else self.credentials.get("workout_history_url", "")
+        history_key = workout_history_api_key if workout_history_api_key is not None else self.credentials.get("workout_history_api_key", "")
+        history_header = workout_history_api_key_header if workout_history_api_key_header is not None else self.credentials.get("workout_history_api_key_header", "")
         self.credentials = {
             "user_id": user_id, 
             "token": token, 
@@ -120,6 +135,9 @@ class SpeedianceClient:
             "custom_instruction": custom_instruction,
             "device_type": int(device_type),
             "allow_monster_moves": bool(allow_monster_moves),
+            "workout_history_url": history_url,
+            "workout_history_api_key": history_key,
+            "workout_history_api_key_header": history_header,
         }
         self.region = region
         self.device_type = int(device_type)
@@ -401,6 +419,41 @@ class SpeedianceClient:
         if resp.status_code == 401:
             raise Exception("Unauthorized")
         return resp.json().get('data', [])
+
+    def get_training_records(self, start_date, end_date):
+        url = f"{self.base_url}/api/mobile/v2/report/userTrainingDataRecord?startDate={start_date}&endDate={end_date}"
+        resp = self._request('GET', url, headers=self._get_headers())
+        if resp.status_code == 401:
+            raise Exception("Unauthorized")
+        return resp.json()
+
+    def get_training_stats(self, start_date, end_date):
+        url = f"{self.base_url}/api/mobile/v2/report/userTrainingDataStat?startDate={start_date}&endDate={end_date}"
+        resp = self._request('GET', url, headers=self._get_headers())
+        if resp.status_code == 401:
+            raise Exception("Unauthorized")
+        return resp.json()
+
+    def get_training_info(self, training_id):
+        url = f"{self.base_url}/api/app/trainingInfo/cttTrainingInfo/{training_id}"
+        resp = self._request('GET', url, headers=self._get_headers())
+        if resp.status_code == 401:
+            raise Exception("Unauthorized")
+        return resp.json().get('data')
+
+    def get_training_detail(self, training_id):
+        url = f"{self.base_url}/api/app/trainingInfo/cttTrainingInfoDetail/{training_id}"
+        resp = self._request('GET', url, headers=self._get_headers())
+        if resp.status_code == 401:
+            raise Exception("Unauthorized")
+        return resp.json().get('data')
+
+    def get_ctt_training_info(self, training_id):
+        url = f"{self.base_url}/api/app/cttTrainingInfo/{training_id}"
+        resp = self._request('GET', url, headers=self._get_headers())
+        if resp.status_code == 401:
+            raise Exception("Unauthorized")
+        return resp.json().get('data')
 
     def delete_workout(self, template_id):
         url = f"{self.base_url}/api/app/customTrainingTemplate?ids={template_id}"
