@@ -13,6 +13,17 @@
 4. Migrate core flows first: auth, library, workout builder, calendar, history.
 5. Replace legacy assets and clean up; remove `legacy-python/` when complete.
 
+## Route Map (Initial)
+- `/` Dashboard
+- `/library` Exercise library
+- `/library/:exerciseId` Exercise detail
+- `/exercise/:exerciseId` Exercise detail (compat route)
+- `/history` History list
+- `/history/:sessionId` History detail
+- `/create` Workout builder
+- `/settings` Settings
+
 ## Progress Log
 - 2026-01-11: Added operating plan to `AGENTS.md`. Starting legacy move + React scaffold.
 - 2026-01-11: Moved Python app into `legacy-python/`, added Vite React scaffold in `web/`, and added `netlify.toml`.
+- 2026-01-11: Added routing shell, placeholder pages, and base visual system for the React app.
