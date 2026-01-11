@@ -1,0 +1,18 @@
+# Refactor Notes
+
+## Decisions
+- React + Vite for the new frontend.
+- Netlify as the target host (static site + Netlify Functions).
+- Move the legacy Python app into `legacy-python/` for reference during migration.
+- No server-side persistence of proprietary Speediance data; keep storage in-browser.
+
+## Planned Phases
+1. Move legacy Python app into `legacy-python/` and set up the React scaffold.
+2. Identify and map legacy routes/features to new React routes/components.
+3. Implement API access via Netlify Functions only where strictly required.
+4. Migrate core flows first: auth, library, workout builder, calendar, history.
+5. Replace legacy assets and clean up; remove `legacy-python/` when complete.
+
+## Progress Log
+- 2026-01-11: Added operating plan to `AGENTS.md`. Starting legacy move + React scaffold.
+- 2026-01-11: Moved Python app into `legacy-python/`, added Vite React scaffold in `web/`, and added `netlify.toml`.
