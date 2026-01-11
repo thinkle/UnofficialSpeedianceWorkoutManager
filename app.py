@@ -1106,11 +1106,11 @@ class TextRedirector(object):
         pass
 
 def open_browser():
-    webbrowser.open_new("http://127.0.0.1:5001")
+    webbrowser.open_new("http://127.0.0.1:8989")
 
 def run_flask_server():
     try:
-        app.run(debug=False, port=5001, host='0.0.0.0', use_reloader=False)
+        app.run(debug=False, port=8989, host='0.0.0.0', use_reloader=False)
     except Exception as e:
         print(f"Error starting server: {e}")
 
@@ -1163,4 +1163,4 @@ if __name__ == '__main__':
     if getattr(sys, 'frozen', False):
         start_gui()
     else:
-        app.run(debug=True, port=5001, host='0.0.0.0')
+        app.run(debug=True, port=8989, host='0.0.0.0')

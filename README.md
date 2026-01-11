@@ -47,7 +47,7 @@ A desktop web interface for managing Speediance Gym Monster workouts, viewing th
     ```bash
     python app.py
     ```
-5.  Open your browser at `http://localhost:5001`.
+5.  Open your browser at `http://localhost:8989`.
 
 ## Configuration
 

@@ -343,6 +343,13 @@
         return `${year}-${month}-${day}`;
     }
 
+    function parseLocalDate(dateStr) {
+        if (!dateStr) return null;
+        const parts = dateStr.split('-').map(Number);
+        if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+
     function isPastDate(dateStr) {
         return dateStr < getTodayString();
     }
@@ -446,10 +453,13 @@
         });
     }
 
-    async function fetchCalendarData() {
+    async function fetchCalendarData(options = {}) {
+        const { showLoading = true } = options;
         const dateStr = getMonthString(currentDate);
         const grid = document.getElementById('calendarGrid');
-        grid.innerHTML = '<div class="col-span-7 text-center text-gray-500 py-10">Loading...</div>';
+        if (showLoading) {
+            grid.innerHTML = '<div class="col-span-7 text-center text-gray-500 py-10">Loading...</div>';
+        }
 
         try {
             const response = await fetch(`/api/calendar?date=${dateStr}`);
@@ -466,6 +476,69 @@
         }
     }
 
+    function buildCalendarCell(day, todayStr) {
+        const cell = document.createElement('div');
+        const isToday = day.date === todayStr;
+
+        cell.className = `calendar-day bg-gray-700/30 rounded border border-gray-700/50 p-2 flex flex-col ${isToday ? 'today' : ''}`;
+        cell.setAttribute('ondragover', 'allowDrop(event)');
+        cell.setAttribute('ondrop', 'drop(event)');
+        cell.setAttribute('ondragleave', 'dragLeave(event)');
+        cell.dataset.date = day.date;
+        cell.addEventListener('click', (event) => handleCalendarClick(event, day.date));
+
+        // Date number
+        const localDate = parseLocalDate(day.date);
+        const dateNum = localDate ? localDate.getDate() : new Date(day.date).getDate();
+        cell.innerHTML = `<div class="text-right text-sm ${isToday ? 'text-blue-400 font-bold' : 'text-gray-400'} mb-1">${dateNum}</div>`;
+
+        // Workouts list
+        const workoutsContainer = document.createElement('div');
+        workoutsContainer.className = 'flex-1 flex flex-col gap-1 overflow-y-auto max-h-[100px]';
+
+        if (day.trainingPlanList && day.trainingPlanList.length > 0) {
+            day.trainingPlanList.forEach(plan => {
+                const pill = document.createElement('div');
+                const isProgram = plan.isReservation === false; // Programs are not reservations
+
+                if (isProgram) {
+                    // Style for Programs (Blue-ish, no delete)
+                    pill.className = 'workout-pill text-xs text-blue-200 bg-blue-900/40 border-blue-800/50 truncate';
+                    pill.title = `Program: ${plan.exclusivePlanName || plan.title}`;
+                } else {
+                    // Style for Custom Scheduled (Standard, with delete)
+                    pill.className = 'workout-pill text-xs text-white truncate cursor-move';
+                    pill.title = plan.title;
+                    pill.draggable = true;
+                    pill.ondragstart = (e) => dragExisting(e, day.date, plan.code || plan.templateCode, plan.title);
+                }
+
+                const titleSpan = document.createElement('span');
+                titleSpan.textContent = plan.title;
+                titleSpan.className = 'truncate flex-1';
+
+                pill.appendChild(titleSpan);
+
+                // Only add delete button for user reservations
+                if (!isProgram) {
+                    const delBtn = document.createElement('span');
+                    delBtn.innerHTML = '&times;';
+                    delBtn.className = 'delete-schedule-btn hover:text-red-300';
+                    delBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteScheduledWorkout(day.date, plan.code || plan.templateCode); // API might return code or templateCode
+                    };
+                    pill.appendChild(delBtn);
+                }
+
+                workoutsContainer.appendChild(pill);
+            });
+        }
+
+        cell.appendChild(workoutsContainer);
+        return cell;
+    }
+
     function renderCalendarGrid(daysData) {
         const grid = document.getElementById('calendarGrid');
         grid.innerHTML = '';
@@ -473,7 +546,7 @@
         if (!daysData || daysData.length === 0) return;
 
         // Determine start day of the week (0=Sun, 1=Mon, etc.)
-        const firstDayDate = new Date(daysData[0].date);
+        const firstDayDate = parseLocalDate(daysData[0].date) || new Date(daysData[0].date);
         const startDay = firstDayDate.getDay();
 
         // Add empty cells for previous month days
@@ -483,69 +556,69 @@
             grid.appendChild(emptyCell);
         }
 
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getTodayString();
 
         daysData.forEach(day => {
-            const cell = document.createElement('div');
-            const isToday = day.date === todayStr;
-            
-            cell.className = `calendar-day bg-gray-700/30 rounded border border-gray-700/50 p-2 flex flex-col ${isToday ? 'today' : ''}`;
-            cell.setAttribute('ondragover', 'allowDrop(event)');
-            cell.setAttribute('ondrop', 'drop(event)');
-            cell.setAttribute('ondragleave', 'dragLeave(event)');
-            cell.dataset.date = day.date;
-            cell.addEventListener('click', (event) => handleCalendarClick(event, day.date));
-
-            // Date number
-            const dateNum = new Date(day.date).getDate();
-            cell.innerHTML = `<div class="text-right text-sm ${isToday ? 'text-blue-400 font-bold' : 'text-gray-400'} mb-1">${dateNum}</div>`;
-
-            // Workouts list
-            const workoutsContainer = document.createElement('div');
-            workoutsContainer.className = 'flex-1 flex flex-col gap-1 overflow-y-auto max-h-[100px]';
-            
-            if (day.trainingPlanList && day.trainingPlanList.length > 0) {
-                day.trainingPlanList.forEach(plan => {
-                    const pill = document.createElement('div');
-                    const isProgram = plan.isReservation === false; // Programs are not reservations
-
-                    if (isProgram) {
-                        // Style for Programs (Blue-ish, no delete)
-                        pill.className = 'workout-pill text-xs text-blue-200 bg-blue-900/40 border-blue-800/50 truncate';
-                        pill.title = `Program: ${plan.exclusivePlanName || plan.title}`;
-                    } else {
-                        // Style for Custom Scheduled (Standard, with delete)
-                        pill.className = 'workout-pill text-xs text-white truncate cursor-move';
-                        pill.title = plan.title;
-                        pill.draggable = true;
-                        pill.ondragstart = (e) => dragExisting(e, day.date, plan.code || plan.templateCode, plan.title);
-                    }
-                    
-                    const titleSpan = document.createElement('span');
-                    titleSpan.textContent = plan.title;
-                    titleSpan.className = 'truncate flex-1';
-                    
-                    pill.appendChild(titleSpan);
-
-                    // Only add delete button for user reservations
-                    if (!isProgram) {
-                        const delBtn = document.createElement('span');
-                        delBtn.innerHTML = '&times;';
-                        delBtn.className = 'delete-schedule-btn hover:text-red-300';
-                        delBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            deleteScheduledWorkout(day.date, plan.code || plan.templateCode); // API might return code or templateCode
-                        };
-                        pill.appendChild(delBtn);
-                    }
-
-                    workoutsContainer.appendChild(pill);
-                });
-            }
-            
-            cell.appendChild(workoutsContainer);
+            const cell = buildCalendarCell(day, todayStr);
             grid.appendChild(cell);
         });
+    }
+
+    function findCalendarDay(dateStr) {
+        if (!dateStr || !Array.isArray(currentCalendarData)) return null;
+        return currentCalendarData.find(day => day.date === dateStr) || null;
+    }
+
+    function ensureTrainingPlanList(day) {
+        if (!day) return [];
+        if (!Array.isArray(day.trainingPlanList)) {
+            day.trainingPlanList = [];
+        }
+        return day.trainingPlanList;
+    }
+
+    function createScheduleEntry(code, name) {
+        const title = name || 'Workout';
+        return {
+            code: code,
+            templateCode: code,
+            title: title,
+            isReservation: true
+        };
+    }
+
+    function updateCalendarDay(dateStr) {
+        const day = findCalendarDay(dateStr);
+        if (!day) return false;
+        const grid = document.getElementById('calendarGrid');
+        if (!grid) return false;
+        const existingCell = grid.querySelector(`.calendar-day[data-date="${dateStr}"]`);
+        if (!existingCell) return false;
+        const todayStr = getTodayString();
+        const newCell = buildCalendarCell(day, todayStr);
+        existingCell.replaceWith(newCell);
+        return true;
+    }
+
+    function addPlanToDay(dateStr, code, name) {
+        const day = findCalendarDay(dateStr);
+        if (!day || !code) return false;
+        const list = ensureTrainingPlanList(day);
+        const alreadyThere = list.some(plan => (plan.code || plan.templateCode) === code);
+        if (!alreadyThere) {
+            list.push(createScheduleEntry(code, name));
+        }
+        return updateCalendarDay(dateStr);
+    }
+
+    function removePlanFromDay(dateStr, code) {
+        const day = findCalendarDay(dateStr);
+        if (!day || !code) return false;
+        const list = ensureTrainingPlanList(day);
+        const index = list.findIndex(plan => (plan.code || plan.templateCode) === code);
+        if (index === -1) return false;
+        list.splice(index, 1);
+        return updateCalendarDay(dateStr);
     }
 
     // --- Drag and Drop Logic ---
@@ -818,10 +891,10 @@
             alert('Cannot schedule workouts to a past date.');
             return;
         }
-        addWorkoutToDate(targetDate, selectedWorkout.code);
+        addWorkoutToDate(targetDate, selectedWorkout.code, selectedWorkout.name);
     }
 
-    async function addWorkoutToDate(targetDate, code) {
+    async function addWorkoutToDate(targetDate, code, name) {
         try {
             const response = await fetch('/api/schedule', {
                 method: 'POST',
@@ -835,7 +908,10 @@
             
             const result = await response.json();
             if (result.success) {
-                fetchCalendarData();
+                const updated = addPlanToDay(targetDate, code, name);
+                if (!updated) {
+                    fetchCalendarData({ showLoading: false });
+                }
             } else {
                 alert('Failed to schedule workout: ' + (result.error || 'Unknown error'));
             }
@@ -894,6 +970,10 @@
                     alert('Failed to move workout (could not remove from original date): ' + (delResult.error || 'Unknown error'));
                     return;
                 }
+                const removed = removePlanFromDay(data.originalDate, data.code);
+                if (!removed) {
+                    fetchCalendarData({ showLoading: false });
+                }
 
                 // 2. Add to new date
                 const addResp = await fetch('/api/schedule', {
@@ -908,10 +988,13 @@
                 const addResult = await addResp.json();
                 
                 if (addResult.success) {
-                    fetchCalendarData();
+                    const added = addPlanToDay(targetDate, data.code, data.name);
+                    if (!added) {
+                        fetchCalendarData({ showLoading: false });
+                    }
                 } else {
                     alert('Failed to move workout (removed from old date but failed to add to new): ' + (addResult.error || 'Unknown error'));
-                    fetchCalendarData(); // Refresh anyway
+                    fetchCalendarData({ showLoading: false });
                 }
 
             } catch (error) {
@@ -921,7 +1004,7 @@
 
         } else {
             // New schedule
-            addWorkoutToDate(targetDate, data.code);
+            addWorkoutToDate(targetDate, data.code, data.name);
         }
     }
 
@@ -941,7 +1024,10 @@
             
             const result = await response.json();
             if (result.success) {
-                fetchCalendarData(); // Reload calendar
+                const updated = removePlanFromDay(date, templateCode);
+                if (!updated) {
+                    fetchCalendarData({ showLoading: false });
+                }
             } else {
                 alert('Failed to remove workout: ' + (result.error || 'Unknown error'));
             }
