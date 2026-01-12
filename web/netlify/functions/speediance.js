@@ -18,6 +18,10 @@ const ALLOWED_PATHS = new Set([
   '/api/app/v5/trainingCalendar/monthNew',
   '/api/app/templateReservation',
   '/api/app/accessories/list',
+  '/api/mobile/v2/report/userTrainingDataRecord',
+  '/api/app/cttTrainingInfo',
+  '/api/app/trainingInfo/cttTrainingInfo',
+  '/api/app/trainingInfo/cttTrainingInfoDetail',
 ])
 
 function resolveHost(region) {
@@ -50,6 +54,15 @@ function sanitizePath(rawPath) {
   if (!rawPath) return null
   if (rawPath.startsWith('/api/app/actionLibraryGroup/') && rawPath !== '/api/app/actionLibraryGroup/list') {
     return '/api/app/actionLibraryGroup'
+  }
+  if (rawPath.startsWith('/api/app/cttTrainingInfo/')) {
+    return '/api/app/cttTrainingInfo'
+  }
+  if (rawPath.startsWith('/api/app/trainingInfo/cttTrainingInfo/')) {
+    return '/api/app/trainingInfo/cttTrainingInfo'
+  }
+  if (rawPath.startsWith('/api/app/trainingInfo/cttTrainingInfoDetail/')) {
+    return '/api/app/trainingInfo/cttTrainingInfoDetail'
   }
   return rawPath
 }

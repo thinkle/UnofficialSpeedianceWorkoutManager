@@ -36,3 +36,4 @@
 - 2026-01-11: Added auth guard + unauthorized handling for library fetches.
 - 2026-01-11: Added English title preferences for library data and enforced Accept-Language in proxy.
 - 2026-01-11: Rebuilt Builder page layout to mirror legacy UI (library sidebar, filters, advanced tools, modals scaffold).
+- 2026-01-11: Started Dashboard + History data wiring and added Builder detail filter scaffolding.
