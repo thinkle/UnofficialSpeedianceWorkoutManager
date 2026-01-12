@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_CONFIG, loadConfig, saveConfig } from '../lib/storage.js'
 import { loginWithPassword, logoutRemote } from '../lib/speedianceAuth.js'
 
@@ -8,10 +8,19 @@ export function AuthProvider({ children }) {
   const [config, setConfig] = useState(loadConfig)
 
   const updateConfig = (partial) => {
-    const next = { ...config, ...partial }
-    setConfig(next)
-    saveConfig(next)
-    return next
+    setConfig((current) => {
+      const next = { ...current, ...partial }
+      saveConfig(next)
+      return next
+    })
+  }
+
+  const clearAuth = () => {
+    setConfig((current) => {
+      const next = { ...DEFAULT_CONFIG, ...current, user_id: '', token: '' }
+      saveConfig(next)
+      return next
+    })
   }
 
   const login = async ({ email, password, region }) => {
@@ -33,16 +42,19 @@ export function AuthProvider({ children }) {
       region: config.region,
     })
 
-    updateConfig({
-      user_id: '',
-      token: '',
-      region: config.region || DEFAULT_CONFIG.region,
-      unit: config.unit ?? DEFAULT_CONFIG.unit,
-      device_type: config.device_type ?? DEFAULT_CONFIG.device_type,
-      allow_monster_moves: config.allow_monster_moves ?? DEFAULT_CONFIG.allow_monster_moves,
-      custom_instruction: config.custom_instruction ?? DEFAULT_CONFIG.custom_instruction,
-    })
+    clearAuth()
   }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleUnauthorized = () => {
+      clearAuth()
+    }
+    window.addEventListener('auth:unauthorized', handleUnauthorized)
+    return () => {
+      window.removeEventListener('auth:unauthorized', handleUnauthorized)
+    }
+  }, [])
 
   const value = useMemo(
     () => ({
@@ -51,6 +63,7 @@ export function AuthProvider({ children }) {
       updateConfig,
       login,
       logout,
+      clearAuth,
     }),
     [config]
   )

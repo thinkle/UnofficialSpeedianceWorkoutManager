@@ -33,3 +33,4 @@
 - 2026-01-11: Added routing shell, placeholder pages, and base visual system for the React app.
 - 2026-01-11: Added auth scaffolding (client state + Netlify login/logout functions) and updated Settings UI.
 - 2026-01-11: Added Speediance proxy function, library fetch with local cache, and exercise detail integration.
+- 2026-01-11: Added auth guard + unauthorized handling for library fetches.

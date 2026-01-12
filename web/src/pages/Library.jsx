@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { fetchLibrary } from '../lib/library.js'
 import { useAuth } from '../state/AuthContext.jsx'
 
 function Library() {
-  const { config, isAuthenticated } = useAuth()
+  const { config, isAuthenticated, clearAuth } = useAuth()
+  const navigate = useNavigate()
   const [status, setStatus] = useState({ type: 'idle', message: '' })
   const [library, setLibrary] = useState({ exercises: [], categories: [] })
   const [search, setSearch] = useState('')
@@ -26,6 +27,12 @@ function Library() {
             message: response.source === 'cache' ? 'Loaded from cache.' : 'Library synced.',
           })
         } else {
+          if (response.unauthorized) {
+            clearAuth()
+            setStatus({ type: 'error', message: 'Session expired. Please sign in again.' })
+            navigate('/settings', { replace: true })
+            return
+          }
           if (import.meta.env.DEV) {
             console.error('[Library] Fetch failed', response)
           }
@@ -33,6 +40,12 @@ function Library() {
         }
       } catch (error) {
         if (!isMounted) return
+        if (error?.code === 'UNAUTHORIZED' || error?.message === 'Unauthorized.') {
+          clearAuth()
+          setStatus({ type: 'error', message: 'Session expired. Please sign in again.' })
+          navigate('/settings', { replace: true })
+          return
+        }
         if (import.meta.env.DEV) {
           console.error('[Library] Fetch exception', error)
         }

@@ -26,6 +26,9 @@ export async function speedianceRequest({
 
   const payload = await response.json().catch(() => ({}))
   if (!response.ok || payload.ok === false) {
+    if (payload.unauthorized && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'))
+    }
     return {
       ok: false,
       status: response.status,

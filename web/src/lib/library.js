@@ -75,6 +75,11 @@ async function fetchCategories(config, deviceTypes) {
       debugLog('Loaded categories', { deviceType, count: response.data?.length || 0 })
     } else {
       debugError('Failed to load categories', { deviceType, response })
+      if (response.unauthorized) {
+        const error = new Error('Unauthorized.')
+        error.code = 'UNAUTHORIZED'
+        throw error
+      }
       throw new Error(response.error || 'Failed to load categories.')
     }
   }
@@ -237,6 +242,9 @@ export async function fetchExerciseDetail(config, exerciseId) {
 
   if (!response.ok) {
     debugError('Failed to load exercise detail', { exerciseId, response })
+    if (response.unauthorized) {
+      return { ok: false, unauthorized: true, error: 'Unauthorized.' }
+    }
     return { ok: false, error: response.error || 'Unable to load exercise.' }
   }
 

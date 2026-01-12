@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../state/AuthContext.jsx'
 
 const navItems = [
@@ -11,6 +11,11 @@ const navItems = [
 
 function AppShell() {
   const { isAuthenticated } = useAuth()
+  const location = useLocation()
+
+  if (!isAuthenticated && location.pathname !== '/settings') {
+    return <Navigate to="/settings" replace />
+  }
 
   return (
     <div className="app">
