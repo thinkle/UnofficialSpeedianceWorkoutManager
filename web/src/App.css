@@ -532,6 +532,46 @@
   gap: 16px;
 }
 
+.notice {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(35, 48, 66, 0.9);
+  background: rgba(17, 25, 38, 0.92);
+  color: var(--muted);
+}
+
+.notice-success {
+  border-color: rgba(94, 234, 212, 0.6);
+  color: var(--accent-2);
+}
+
+.notice-error {
+  border-color: rgba(248, 113, 113, 0.6);
+  color: #fca5a5;
+}
+
+.notice-loading {
+  border-color: rgba(255, 183, 3, 0.6);
+  color: var(--accent);
+}
+
+.details {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(35, 48, 66, 0.6);
+}
+
+.details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.details[open] summary {
+  color: var(--text);
+}
+
 .builder-layout .card {
   min-height: 360px;
 }

@@ -9,7 +9,7 @@ function ExerciseDetail() {
         <div>
           <p className="eyebrow">Exercise</p>
           <h1 className="page-title">Exercise detail</h1>
-          <p className="page-subtitle">ID: {exerciseId || '—'} · Media and cues will load here.</p>
+          <p className="page-subtitle">ID: {exerciseId || '--'} - Media and cues will load here.</p>
         </div>
         <NavLink className="btn btn-outline" to="/library">
           Back to library

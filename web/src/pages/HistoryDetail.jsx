@@ -14,7 +14,7 @@ function HistoryDetail() {
       <section className="page-header">
         <div>
           <p className="eyebrow">Session detail</p>
-          <h1 className="page-title">Session {sessionId || '—'}</h1>
+          <h1 className="page-title">Session {sessionId || '--'}</h1>
           <p className="page-subtitle">Detailed metrics and notes will populate after sync.</p>
         </div>
         <NavLink className="btn btn-outline" to="/history">

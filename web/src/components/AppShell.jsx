@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { useAuth } from '../state/AuthContext.jsx'
 
 const navItems = [
   { to: '/', label: 'Dashboard', end: true },
@@ -9,6 +10,8 @@ const navItems = [
 ]
 
 function AppShell() {
+  const { isAuthenticated } = useAuth()
+
   return (
     <div className="app">
       <div className="announcement">
@@ -43,6 +46,9 @@ function AppShell() {
             <NavLink to="/create" className="btn btn-primary">
               New Plan
             </NavLink>
+            <NavLink to="/settings" className="btn btn-outline">
+              {isAuthenticated ? 'Connected' : 'Connect'}
+            </NavLink>
           </div>
         </div>
       </header>
@@ -57,7 +63,7 @@ function AppShell() {
         </div>
         <div className="footer-links">
           <span>Version: in-progress</span>
-          <span className="dot">•</span>
+          <span className="dot">|</span>
           <span>Netlify target</span>
         </div>
       </footer>

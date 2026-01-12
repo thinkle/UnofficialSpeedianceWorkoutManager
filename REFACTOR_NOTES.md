@@ -23,7 +23,12 @@
 - `/create` Workout builder
 - `/settings` Settings
 
+## Dev Notes
+- Auth now runs through Netlify Functions at `/.netlify/functions/auth-login` and `/.netlify/functions/auth-logout`.
+- For local auth testing, run `netlify dev` from the repo root (Netlify CLI required).
+
 ## Progress Log
 - 2026-01-11: Added operating plan to `AGENTS.md`. Starting legacy move + React scaffold.
 - 2026-01-11: Moved Python app into `legacy-python/`, added Vite React scaffold in `web/`, and added `netlify.toml`.
 - 2026-01-11: Added routing shell, placeholder pages, and base visual system for the React app.
+- 2026-01-11: Added auth scaffolding (client state + Netlify login/logout functions) and updated Settings UI.

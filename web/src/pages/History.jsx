@@ -4,17 +4,17 @@ const historyItems = [
   {
     id: '2025-10-18',
     title: 'Upper focus',
-    detail: '45 min · Strength emphasis',
+    detail: '45 min - Strength emphasis',
   },
   {
     id: '2025-10-15',
     title: 'Lower split',
-    detail: '50 min · Lower body',
+    detail: '50 min - Lower body',
   },
   {
     id: '2025-10-12',
     title: 'Core + mobility',
-    detail: '35 min · Recovery',
+    detail: '35 min - Recovery',
   },
 ]
 
