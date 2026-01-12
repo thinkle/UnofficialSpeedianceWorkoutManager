@@ -5,6 +5,7 @@ const DEFAULT_HEADERS = {
   Mobiledevices:
     '{"brand":"google","device":"emulator64_x86_64_arm64","deviceType":"sdk_gphone64_x86_64","os":"","os_version":"31","manufacturer":"Google"}',
   App_type: 'SOFTWARE',
+  'Accept-Language': 'en',
 }
 
 const ALLOWED_PATHS = new Set([

@@ -9,6 +9,18 @@ function ExerciseDetail() {
   const [status, setStatus] = useState({ type: 'idle', message: '' })
   const [detail, setDetail] = useState(null)
 
+  const displayTitle =
+    detail?.titleEn ||
+    detail?.titleEN ||
+    detail?.actionNameEn ||
+    detail?.actionNameEN ||
+    detail?.nameEn ||
+    detail?.nameEN ||
+    detail?.title ||
+    detail?.actionName ||
+    detail?.name ||
+    ''
+
   useEffect(() => {
     let isMounted = true
 
@@ -38,7 +50,7 @@ function ExerciseDetail() {
       <section className="page-header">
         <div>
           <p className="eyebrow">Exercise</p>
-          <h1 className="page-title">{detail?.title || 'Exercise detail'}</h1>
+          <h1 className="page-title">{displayTitle || 'Exercise detail'}</h1>
           <p className="page-subtitle">
             ID: {exerciseId || '--'} - Media and cues will load here.
           </p>
@@ -76,12 +88,17 @@ function ExerciseDetail() {
             <div className="highlight">
               <div className="highlight-title">Equipment</div>
               <div className="highlight-copy">
-                {detail?.equipment_name || detail?.equipmentName || 'Not available yet.'}
+                {detail?.equipment_name_en ||
+                  detail?.equipment_name ||
+                  detail?.equipmentName ||
+                  'Not available yet.'}
               </div>
             </div>
             <div className="highlight">
               <div className="highlight-title">Category</div>
-              <div className="highlight-copy">{detail?.category_name || 'Not available yet.'}</div>
+              <div className="highlight-copy">
+                {detail?.category_name_en || detail?.category_name || detail?.categoryName || 'Not available yet.'}
+              </div>
             </div>
           </div>
         </div>

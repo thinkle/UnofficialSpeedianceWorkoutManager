@@ -30,6 +30,24 @@ function normalizeCategoryName(name) {
   return (name || '').trim().toLowerCase()
 }
 
+function pickExerciseTitle(record) {
+  const candidates = [
+    record?.titleEn,
+    record?.titleEN,
+    record?.actionNameEn,
+    record?.actionNameEN,
+    record?.nameEn,
+    record?.nameEN,
+    record?.title,
+    record?.actionName,
+    record?.name,
+    record?.actionNameCn,
+    record?.actionNameCN,
+  ]
+
+  return candidates.find((value) => typeof value === 'string' && value.trim()) || ''
+}
+
 function mergeCategories(categoriesByDevice) {
   const merged = new Map()
 
@@ -41,7 +59,7 @@ function mergeCategories(categoriesByDevice) {
       if (!merged.has(key)) {
         merged.set(key, {
           id: category.id,
-          name: category.name,
+          name: category.displayName || category.name,
           filter_ids: [category.id],
         })
       } else {
@@ -71,8 +89,12 @@ async function fetchCategories(config, deviceTypes) {
       config,
     })
     if (response.ok) {
-      results.push({ deviceType, categories: response.data || [] })
-      debugLog('Loaded categories', { deviceType, count: response.data?.length || 0 })
+      const categories = (response.data || []).map((category) => ({
+        ...category,
+        displayName: category.nameEn || category.nameEN || category.name,
+      }))
+      results.push({ deviceType, categories })
+      debugLog('Loaded categories', { deviceType, count: categories.length })
     } else {
       debugError('Failed to load categories', { deviceType, response })
       if (response.unauthorized) {
@@ -120,17 +142,12 @@ async function fetchLibraryGroups(config, categoriesByDevice) {
       groups.forEach((group) => {
         const actions = group.actionLibraryGroupList || []
         actions.forEach((action) => {
-          const title =
-            action.title ||
-            action.actionName ||
-            action.name ||
-            action.actionNameEn ||
-            action.actionNameCn
+          const title = pickExerciseTitle(action)
           const entryAction = {
             ...action,
             title: title || action.title,
             category_id: category.id,
-            category_name: category.name,
+            category_name: category.displayName || category.name,
             device_type: deviceType,
           }
           allExercises.push(entryAction)

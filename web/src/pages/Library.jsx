@@ -140,7 +140,7 @@ function Library() {
             type="button"
             onClick={() => setActiveCategory(String(category.id))}
           >
-            {category.name}
+            {category.displayName || category.name}
           </button>
         ))}
         {isAuthenticated ? (
@@ -149,10 +149,23 @@ function Library() {
       </section>
 
       <section className="grid-3">
-        {filteredExercises.map((exercise) => (
+        {filteredExercises.map((exercise) => {
+          const focus =
+            exercise.mainMuscleGroupNameEn ||
+            exercise.mainMuscleGroupNameEN ||
+            exercise.mainMuscleGroupName ||
+            'Focus'
+          const equipment =
+            exercise.equipment_name_en ||
+            exercise.equipment_name_en_us ||
+            exercise.equipment_name_en_gb ||
+            exercise.equipment_name ||
+            exercise.equipmentName
+
+          return (
           <div key={exercise.id} className="card exercise-card">
             <div className="exercise-header">
-              <span className="tag">{exercise.mainMuscleGroupName || 'Focus'}</span>
+              <span className="tag">{focus}</span>
               <NavLink className="btn btn-ghost" to={`/library/${exercise.id}`}>
                 Details
               </NavLink>
@@ -160,10 +173,11 @@ function Library() {
             <div className="exercise-title">{exercise.title || 'Untitled'}</div>
             <div className="exercise-meta">
               {exercise.category_name || 'Category'}
-              {exercise.equipment_name ? ` - ${exercise.equipment_name}` : ''}
+              {equipment ? ` - ${equipment}` : ''}
             </div>
           </div>
-        ))}
+          )
+        })}
       </section>
     </div>
   )
