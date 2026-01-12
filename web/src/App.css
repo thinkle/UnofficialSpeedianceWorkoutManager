@@ -455,6 +455,12 @@
   color: var(--muted);
 }
 
+.chip-active {
+  border-color: rgba(94, 234, 212, 0.6);
+  color: var(--text);
+  background: rgba(94, 234, 212, 0.12);
+}
+
 .filter-meta {
   margin-left: auto;
   color: var(--muted);

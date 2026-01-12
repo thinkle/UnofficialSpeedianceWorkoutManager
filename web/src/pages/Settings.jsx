@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { DEFAULT_CONFIG } from '../lib/storage.js'
+import { CACHE_PREFIX, DEFAULT_CONFIG } from '../lib/storage.js'
 import { useAuth } from '../state/AuthContext.jsx'
 
 const regionOptions = [
@@ -69,6 +69,7 @@ function Settings() {
     updateConfig({
       token: manualForm.token.trim(),
       user_id: manualForm.userId.trim(),
+      region: loginForm.region,
     })
     setStatus({ type: 'success', message: 'Manual session saved locally.' })
   }
@@ -91,7 +92,7 @@ function Settings() {
   const handleCacheClear = () => {
     if (typeof window === 'undefined') return
     Object.keys(window.localStorage).forEach((key) => {
-      if (key.startsWith('workout-manager.cache.')) {
+      if (key.startsWith(CACHE_PREFIX)) {
         window.localStorage.removeItem(key)
       }
     })

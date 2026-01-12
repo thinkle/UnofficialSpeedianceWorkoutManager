@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'workout-manager.config'
+export const CACHE_PREFIX = 'workout-manager.cache.'
 
 export const DEFAULT_CONFIG = {
   user_id: '',
@@ -30,4 +31,32 @@ export function loadConfig() {
 export function saveConfig(config) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+}
+
+export function loadCache(key) {
+  if (typeof window === 'undefined') return null
+  const fullKey = `${CACHE_PREFIX}${key}`
+  try {
+    const raw = window.localStorage.getItem(fullKey)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch (error) {
+    return null
+  }
+}
+
+export function saveCache(key, data) {
+  if (typeof window === 'undefined') return
+  const fullKey = `${CACHE_PREFIX}${key}`
+  window.localStorage.setItem(fullKey, JSON.stringify(data))
+}
+
+export function buildLibraryCacheKey({ region, deviceType, allowMonsterMoves }) {
+  const allowFlag = allowMonsterMoves ? 1 : 0
+  return `library.${region}.device${deviceType}.allow${allowFlag}`
+}
+
+export function buildExerciseCacheKey({ region, deviceType, allowMonsterMoves, exerciseId }) {
+  const allowFlag = allowMonsterMoves ? 1 : 0
+  return `exercise.${region}.device${deviceType}.allow${allowFlag}.${exerciseId}`
 }
