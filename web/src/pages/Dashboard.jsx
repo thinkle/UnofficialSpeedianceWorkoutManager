@@ -63,8 +63,8 @@ function Dashboard() {
           <div className="hero-card-body">
             <div className="calendar-preview">
               <div className="calendar-week">
-                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
-                  <span key={day}>{day}</span>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                  <span key={`${day}-${index}`}>{day}</span>
                 ))}
               </div>
               <div className="calendar-grid">

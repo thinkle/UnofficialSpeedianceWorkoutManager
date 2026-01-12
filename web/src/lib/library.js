@@ -6,8 +6,6 @@ import {
 } from './storage.js'
 import { speedianceRequest } from './speedianceApi.js'
 
-const DETAIL_BATCH_SIZE = 50
-
 function normalizeCategoryName(name) {
   return (name || '').trim().toLowerCase()
 }
@@ -85,8 +83,15 @@ async function fetchLibraryGroups(config, categoriesByDevice) {
       groups.forEach((group) => {
         const actions = group.actionLibraryGroupList || []
         actions.forEach((action) => {
+          const title =
+            action.title ||
+            action.actionName ||
+            action.name ||
+            action.actionNameEn ||
+            action.actionNameCn
           const entryAction = {
             ...action,
+            title: title || action.title,
             category_id: category.id,
             category_name: category.name,
             device_type: deviceType,
@@ -122,22 +127,6 @@ function dedupeExercises(rawExercises) {
   return unique
 }
 
-async function fetchBatchDetails(config, ids) {
-  if (!ids.length) return []
-  const response = await speedianceRequest({
-    path: '/api/app/actionLibraryGroup/list',
-    method: 'GET',
-    query: { ids },
-    config,
-  })
-
-  if (!response.ok) {
-    throw new Error(response.error || 'Failed to fetch exercise details.')
-  }
-
-  return response.data || []
-}
-
 export async function fetchLibrary(config) {
   const cacheKey = buildLibraryCacheKey({
     region: config.region,
@@ -164,27 +153,13 @@ export async function fetchLibrary(config) {
 
   const rawExercises = await fetchLibraryGroups(config, categoriesByDevice)
   const uniqueMap = dedupeExercises(rawExercises)
-  const allIds = Array.from(uniqueMap.keys())
-  const detailed = []
-
-  for (let i = 0; i < allIds.length; i += DETAIL_BATCH_SIZE) {
-    const chunk = allIds.slice(i, i + DETAIL_BATCH_SIZE)
-    const details = await fetchBatchDetails(config, chunk)
-    details.forEach((detail) => {
-      const original = uniqueMap.get(detail.id)
-      if (!original) return
-      detail.category_id = original.category_id
-      detail.category_name = original.category_name
-      detail.device_type_list = original.device_type_list
-      detail.device_type_tag = (original.device_type_list || [])
-        .filter(Boolean)
-        .join(',')
-    })
-    detailed.push(...details)
-  }
+  const exercises = Array.from(uniqueMap.values()).map((exercise) => ({
+    ...exercise,
+    device_type_tag: (exercise.device_type_list || []).filter(Boolean).join(','),
+  }))
 
   const payload = {
-    exercises: detailed,
+    exercises,
     categories,
     fetchedAt: new Date().toISOString(),
   }
