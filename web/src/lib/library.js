@@ -269,3 +269,57 @@ export async function fetchExerciseDetail(config, exerciseId) {
   saveCache(cacheKey, response.data)
   return { ok: true, data: response.data, source: 'network' }
 }
+
+export async function fetchExerciseDetailsBatch(config, ids) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { ok: true, data: {} }
+  }
+
+  const detailMap = {}
+  const missing = []
+
+  ids.forEach((exerciseId) => {
+    const cacheKey = buildExerciseCacheKey({
+      region: config.region,
+      deviceType: config.device_type,
+      allowMonsterMoves: config.allow_monster_moves,
+      exerciseId,
+    })
+    const cached = loadCache(cacheKey)
+    if (cached) {
+      detailMap[exerciseId] = cached
+    } else {
+      missing.push(exerciseId)
+    }
+  })
+
+  if (missing.length === 0) {
+    return { ok: true, data: detailMap, source: 'cache' }
+  }
+
+  const response = await speedianceRequest({
+    path: '/api/app/actionLibraryGroup/list',
+    method: 'GET',
+    query: { ids: missing },
+    config,
+  })
+
+  if (!response.ok) {
+    return response
+  }
+
+  const details = response.data || []
+  details.forEach((detail) => {
+    if (!detail?.id) return
+    const cacheKey = buildExerciseCacheKey({
+      region: config.region,
+      deviceType: config.device_type,
+      allowMonsterMoves: config.allow_monster_moves,
+      exerciseId: detail.id,
+    })
+    saveCache(cacheKey, detail)
+    detailMap[detail.id] = detail
+  })
+
+  return { ok: true, data: detailMap, source: 'network' }
+}

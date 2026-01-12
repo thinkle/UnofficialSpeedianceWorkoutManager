@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchLibrary } from '../lib/library.js'
+import { fetchExerciseDetailsBatch, fetchLibrary } from '../lib/library.js'
 import { useAuth } from '../state/AuthContext.jsx'
+
+const DETAIL_FETCH_LIMIT = 75
+
+function formatCablePosition(value) {
+  if (value === 'unknown') return 'Unknown'
+  const numeric = Number(value)
+  if (Number.isNaN(numeric)) return String(value)
+  if (numeric === 10) return 'Platform End (Lowest/Floor)'
+  if (numeric === 0) return 'Top (Highest)'
+  return `Level ${numeric}`
+}
 
 function Builder() {
   const { config, isAuthenticated } = useAuth()
@@ -9,6 +20,14 @@ function Builder() {
   const [search, setSearch] = useState('')
   const [categoryId, setCategoryId] = useState('all')
   const [deviceFilter, setDeviceFilter] = useState('all')
+  const [detailEnabled, setDetailEnabled] = useState(false)
+  const [detailCable, setDetailCable] = useState('all')
+  const [detailBench, setDetailBench] = useState('all')
+  const [fuzzyCable, setFuzzyCable] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailMessage, setDetailMessage] = useState('')
+  const [detailMap, setDetailMap] = useState({})
+  const [detailOptions, setDetailOptions] = useState({ cables: [], benches: [] })
   const [showImport, setShowImport] = useState(false)
   const [showDebug, setShowDebug] = useState(false)
   const [showPrompt, setShowPrompt] = useState(false)
@@ -41,11 +60,14 @@ function Builder() {
     }
   }, [config, isAuthenticated])
 
-  const filteredExercises = useMemo(() => {
+  const baseExercises = useMemo(() => {
     const term = search.trim().toLowerCase()
     return (library.exercises || []).filter((exercise) => {
-      if (categoryId !== 'all' && String(exercise.category_id) !== categoryId) {
-        return false
+      if (categoryId !== 'all') {
+        const categories = String(categoryId).split(',').map((value) => value.trim())
+        if (!categories.includes(String(exercise.category_id))) {
+          return false
+        }
       }
       if (deviceFilter !== 'all') {
         const devices = String(exercise.device_type_tag || exercise.device_type || '')
@@ -68,6 +90,128 @@ function Builder() {
       return haystack.includes(term)
     })
   }, [library.exercises, search, categoryId, deviceFilter])
+
+  const filteredExercises = useMemo(() => {
+    if (!detailEnabled || (detailCable === 'all' && detailBench === 'all')) {
+      return baseExercises
+    }
+
+    return baseExercises.filter((exercise) => {
+      const detail = detailMap[exercise.id]
+      if (!detail) return false
+
+      const cableValue =
+        detail.outPosition === undefined || detail.outPosition === null
+          ? 'unknown'
+          : String(detail.outPosition)
+      const benchValue =
+        detail.foldingStoolAngle === undefined ||
+        detail.foldingStoolAngle === null ||
+        detail.foldingStoolAngle === ''
+          ? 'unknown'
+          : String(detail.foldingStoolAngle)
+
+      let cableMatch = detailCable === 'all' || cableValue === detailCable
+      if (!cableMatch && fuzzyCable && detailCable !== 'all') {
+        const cableNum = Number(cableValue)
+        const filterNum = Number(detailCable)
+        if (!Number.isNaN(cableNum) && !Number.isNaN(filterNum)) {
+          cableMatch = Math.abs(cableNum - filterNum) <= 1
+        }
+      }
+
+      const benchMatch = detailBench === 'all' || benchValue === detailBench
+      return cableMatch && benchMatch
+    })
+  }, [baseExercises, detailEnabled, detailCable, detailBench, fuzzyCable, detailMap])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadDetailData = async () => {
+      if (!detailEnabled || !isAuthenticated) {
+        setDetailMessage('')
+        setDetailOptions({ cables: [], benches: [] })
+        return
+      }
+
+      const candidateIds = baseExercises.map((exercise) => exercise.id)
+      if (candidateIds.length === 0) {
+        setDetailMessage('Detail filters load when base filters are active.')
+        return
+      }
+
+      if (candidateIds.length > DETAIL_FETCH_LIMIT) {
+        setDetailMessage(
+          `Detail filters paused at ${candidateIds.length} results. Narrow below ${DETAIL_FETCH_LIMIT}.`
+        )
+        return
+      }
+
+      const hasAllDetails = candidateIds.every((id) => detailMap[id])
+      let nextMap = detailMap
+
+      if (!hasAllDetails) {
+        setDetailLoading(true)
+        setDetailMessage(`Loading details for ${candidateIds.length} exercises...`)
+
+        const response = await fetchExerciseDetailsBatch(config, candidateIds)
+        if (!isMounted) return
+
+        setDetailLoading(false)
+        if (!response.ok) {
+          setDetailMessage(response.error || 'Unable to load detail filters.')
+          return
+        }
+
+        nextMap = { ...detailMap, ...response.data }
+        setDetailMap(nextMap)
+      }
+
+      const cableValues = new Set()
+      const benchValues = new Set()
+      candidateIds.forEach((id) => {
+        const detail = nextMap[id]
+        if (!detail) {
+          cableValues.add('unknown')
+          benchValues.add('unknown')
+          return
+        }
+        if (detail.outPosition === undefined || detail.outPosition === null) {
+          cableValues.add('unknown')
+        } else {
+          cableValues.add(String(detail.outPosition))
+        }
+        if (
+          detail.foldingStoolAngle === undefined ||
+          detail.foldingStoolAngle === null ||
+          detail.foldingStoolAngle === ''
+        ) {
+          benchValues.add('unknown')
+        } else {
+          benchValues.add(String(detail.foldingStoolAngle))
+        }
+      })
+
+      const sortNumeric = (a, b) => {
+        if (a === 'unknown') return 1
+        if (b === 'unknown') return -1
+        return Number(a) - Number(b)
+      }
+
+      setDetailOptions({
+        cables: Array.from(cableValues).sort(sortNumeric),
+        benches: Array.from(benchValues).sort(sortNumeric),
+      })
+      setDetailMessage('')
+    }
+
+    loadDetailData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [baseExercises, detailEnabled, isAuthenticated, config, detailMap])
 
   const showDeviceFilters = config.device_type === 2 && config.allow_monster_moves
 
@@ -100,12 +244,16 @@ function Builder() {
                   Same equipment as previous
                 </label>
                 <label className="builder-checkbox">
-                  <input type="checkbox" />
+                  <input
+                    type="checkbox"
+                    checked={detailEnabled}
+                    onChange={(event) => setDetailEnabled(event.target.checked)}
+                  />
                   Enable detailed filtering
                 </label>
-                <div className="builder-muted" data-hidden>
-                  Detail filters load when base filters are active.
-                </div>
+                {detailMessage ? (
+                  <div className="builder-muted">{detailMessage}</div>
+                ) : null}
 
                 <details className="builder-subdetails">
                   <summary>Equipment filters</summary>
@@ -124,18 +272,45 @@ function Builder() {
                 <div className="builder-subdetails">
                   <div className="builder-subdetails-title">Detail filters (cable height, bench angle)</div>
                   <label className="builder-checkbox">
-                    <input type="checkbox" />
+                    <input
+                      type="checkbox"
+                      checked={fuzzyCable}
+                      onChange={(event) => setFuzzyCable(event.target.checked)}
+                      disabled={!detailEnabled}
+                    />
                     Fuzzy cable height (plus/minus 1)
                   </label>
                   <div className="builder-two-col">
-                    <select disabled className="builder-select">
-                      <option>Cable height: Any</option>
+                    <select
+                      className="builder-select"
+                      disabled={!detailEnabled || detailLoading}
+                      value={detailCable}
+                      onChange={(event) => setDetailCable(event.target.value)}
+                    >
+                      <option value="all">Cable height: Any</option>
+                      {detailOptions.cables.map((value) => (
+                        <option key={value} value={value}>
+                          Cable height: {formatCablePosition(value)}
+                        </option>
+                      ))}
                     </select>
-                    <select disabled className="builder-select">
-                      <option>Bench angle: Any</option>
+                    <select
+                      className="builder-select"
+                      disabled={!detailEnabled || detailLoading}
+                      value={detailBench}
+                      onChange={(event) => setDetailBench(event.target.value)}
+                    >
+                      <option value="all">Bench angle: Any</option>
+                      {detailOptions.benches.map((value) => (
+                        <option key={value} value={value}>
+                          Bench angle: {value === 'unknown' ? 'Unknown' : `${value} deg`}
+                        </option>
+                      ))}
                     </select>
                   </div>
-                  <div className="builder-muted">Detail filters auto-load when base filters are active.</div>
+                  <div className="builder-muted">
+                    {detailLoading ? 'Loading detail filters...' : 'Detail filters auto-load when base filters are active.'}
+                  </div>
                 </div>
               </div>
             </details>
