@@ -26,10 +26,16 @@ function Library() {
             message: response.source === 'cache' ? 'Loaded from cache.' : 'Library synced.',
           })
         } else {
+          if (import.meta.env.DEV) {
+            console.error('[Library] Fetch failed', response)
+          }
           setStatus({ type: 'error', message: response.error || 'Failed to load library.' })
         }
       } catch (error) {
         if (!isMounted) return
+        if (import.meta.env.DEV) {
+          console.error('[Library] Fetch exception', error)
+        }
         setStatus({ type: 'error', message: 'Failed to load library.' })
       }
     }

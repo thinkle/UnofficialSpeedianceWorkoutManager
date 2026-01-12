@@ -6,6 +6,26 @@ import {
 } from './storage.js'
 import { speedianceRequest } from './speedianceApi.js'
 
+const DEBUG = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV
+
+function debugLog(message, data) {
+  if (!DEBUG) return
+  if (data !== undefined) {
+    console.info(`[Library] ${message}`, data)
+  } else {
+    console.info(`[Library] ${message}`)
+  }
+}
+
+function debugError(message, data) {
+  if (!DEBUG) return
+  if (data !== undefined) {
+    console.error(`[Library] ${message}`, data)
+  } else {
+    console.error(`[Library] ${message}`)
+  }
+}
+
 function normalizeCategoryName(name) {
   return (name || '').trim().toLowerCase()
 }
@@ -52,7 +72,9 @@ async function fetchCategories(config, deviceTypes) {
     })
     if (response.ok) {
       results.push({ deviceType, categories: response.data || [] })
+      debugLog('Loaded categories', { deviceType, count: response.data?.length || 0 })
     } else {
+      debugError('Failed to load categories', { deviceType, response })
       throw new Error(response.error || 'Failed to load categories.')
     }
   }
@@ -76,10 +98,20 @@ async function fetchLibraryGroups(config, categoriesByDevice) {
       })
 
       if (!response.ok) {
+        debugError('Failed to load training groups', {
+          deviceType,
+          tabId: category.id,
+          response,
+        })
         continue
       }
 
       const groups = response.data || []
+      debugLog('Loaded training groups', {
+        deviceType,
+        tabId: category.id,
+        groups: groups.length,
+      })
       groups.forEach((group) => {
         const actions = group.actionLibraryGroupList || []
         actions.forEach((action) => {
@@ -128,6 +160,11 @@ function dedupeExercises(rawExercises) {
 }
 
 export async function fetchLibrary(config) {
+  debugLog('Fetch library start', {
+    region: config.region,
+    deviceType: config.device_type,
+    allowMonsterMoves: config.allow_monster_moves,
+  })
   const cacheKey = buildLibraryCacheKey({
     region: config.region,
     deviceType: config.device_type,
@@ -136,6 +173,7 @@ export async function fetchLibrary(config) {
 
   const cached = loadCache(cacheKey)
   if (cached) {
+    debugLog('Library cache hit', { exercises: cached.exercises?.length || 0 })
     return { ok: true, data: cached, source: 'cache' }
   }
 
@@ -157,6 +195,10 @@ export async function fetchLibrary(config) {
     ...exercise,
     device_type_tag: (exercise.device_type_list || []).filter(Boolean).join(','),
   }))
+  debugLog('Library dedupe complete', {
+    raw: rawExercises.length,
+    unique: exercises.length,
+  })
 
   const payload = {
     exercises,
@@ -182,6 +224,7 @@ export async function fetchExerciseDetail(config, exerciseId) {
   })
   const cached = loadCache(cacheKey)
   if (cached) {
+    debugLog('Exercise cache hit', { exerciseId })
     return { ok: true, data: cached, source: 'cache' }
   }
 
@@ -193,9 +236,11 @@ export async function fetchExerciseDetail(config, exerciseId) {
   })
 
   if (!response.ok) {
+    debugError('Failed to load exercise detail', { exerciseId, response })
     return { ok: false, error: response.error || 'Unable to load exercise.' }
   }
 
+  debugLog('Loaded exercise detail', { exerciseId })
   saveCache(cacheKey, response.data)
   return { ok: true, data: response.data, source: 'network' }
 }
