@@ -15,6 +15,8 @@ const ALLOWED_PATHS = new Set([
   '/api/app/actionLibraryGroup',
   '/api/app/v4/customTrainingTemplate/appPage',
   '/api/app/v3/customTrainingTemplate/detailByCode',
+  '/api/app/v2/customTrainingTemplate',
+  '/api/app/customTrainingTemplate',
   '/api/app/v5/trainingCalendar/monthNew',
   '/api/app/templateReservation',
   '/api/app/accessories/list',
@@ -114,10 +116,9 @@ export async function handler(event) {
     App_user_id: userId || '',
   }
 
-  const targetPath = path.startsWith('/api/app/actionLibraryGroup/')
-    ? path
-    : normalizedPath
-  const url = buildFullUrl(baseUrl, targetPath, query)
+  // Use the original path (with IDs etc.) for the actual request,
+  // sanitizePath is only for allowlist validation
+  const url = buildFullUrl(baseUrl, path, query)
 
   try {
     const response = await fetch(url, {

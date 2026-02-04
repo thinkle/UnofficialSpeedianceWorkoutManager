@@ -1,6 +1,21 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { fetchExerciseDetailsBatch, fetchLibrary } from '../lib/library.js'
+import { fetchWorkoutDetail, saveWorkout } from '../lib/workouts.js'
 import { useAuth } from '../state/AuthContext.jsx'
+import ExerciseCard from '../components/ExerciseCard.jsx'
+import CircuitBlock from '../components/CircuitBlock.jsx'
+import {
+  parseWorkoutBlocks,
+  replaceExercisesWithCircuit,
+  undoCircuit,
+  removeCircuit,
+  moveCircuit,
+  appendSetToCircuit,
+  deleteSetFromCircuit,
+  deleteExerciseFromCircuit,
+} from '../lib/circuits.js'
+import { applyPresetToSets } from '../lib/presets.js'
 
 const DETAIL_FETCH_LIMIT = 75
 
@@ -13,8 +28,99 @@ function formatCablePosition(value) {
   return `Level ${numeric}`
 }
 
+function generateId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+function createDefaultSet() {
+  return {
+    id: generateId(),
+    reps: 10,
+    weight: 20,
+    rest: 60,
+    mode: 1,
+    unit: 'reps',
+  }
+}
+
+function createExerciseFromLibrary(libraryExercise) {
+  return {
+    id: generateId(),
+    groupId: libraryExercise.id,
+    title: libraryExercise.title || 'Untitled',
+    img: libraryExercise.img || '',
+    category_name: libraryExercise.category_name || '',
+    preset_id: -1,
+    isUnilateral: false,
+    sets: [createDefaultSet(), createDefaultSet(), createDefaultSet()],
+  }
+}
+
+function normalizeExistingWorkout(workout) {
+  if (!workout) return null
+
+  const exercises = (workout.actionLibraryList || []).map((action) => {
+    const setsAndReps = (action.setsAndReps || '').split(',').filter(Boolean)
+    const weights = (action.weights || '').split(',').filter(Boolean)
+    const breakTimes = (action.breakTime || action.breakTime2 || '').split(',').filter(Boolean)
+    const modes = (action.sportMode || '').split(',').filter(Boolean)
+    // API uses lowercase 'counterweight2'
+    const counterWeights = (action.counterweight2 || action.counterWeight2 || '').split(',').filter(Boolean)
+
+    // templatePresetId: -1 = Custom, 1 = Gain Muscle, 3 = Stamina, 5 = Strength
+    const rawPresetId = action.templatePresetId
+    const presetId = rawPresetId === undefined || rawPresetId === null || rawPresetId === ''
+      ? -1
+      : parseInt(rawPresetId, 10)
+    const isRM = presetId !== -1 && presetId !== 0
+
+    const sets = setsAndReps.map((reps, index) => {
+      let weight = 0
+      if (isRM && counterWeights[index]) {
+        // For RM presets, use counterweight2 (the RM value)
+        weight = parseInt(counterWeights[index], 10)
+      } else {
+        // For custom, weights are in KG from the API
+        const rawWeight = parseFloat(weights[index] || 0)
+        weight = Math.round(rawWeight)
+      }
+
+      return {
+        id: generateId(),
+        reps: parseInt(reps, 10) || 10,
+        weight,
+        rest: parseInt(breakTimes[index] || 60, 10),
+        mode: parseInt(modes[index] || 1, 10),
+        unit: 'reps',
+      }
+    })
+
+    return {
+      id: generateId(),
+      groupId: action.groupId,
+      title: action.name || action.title || 'Untitled',
+      img: action.img || '',
+      category_name: '',
+      preset_id: presetId,
+      variant_id: action.actionLibraryId,
+      isUnilateral: action.isLeftRight === 1,
+      sets: sets.length > 0 ? sets : [createDefaultSet()],
+    }
+  })
+
+  return {
+    id: workout.id,
+    name: workout.name || '',
+    exercises,
+  }
+}
+
 function Builder() {
-  const { config, isAuthenticated } = useAuth()
+  const { config, isAuthenticated, clearAuth } = useAuth()
+  const navigate = useNavigate()
+  const { workoutCode } = useParams()
+
+  // Library state
   const [status, setStatus] = useState({ type: 'idle', message: '' })
   const [library, setLibrary] = useState({ exercises: [], categories: [] })
   const [search, setSearch] = useState('')
@@ -28,10 +134,29 @@ function Builder() {
   const [detailMessage, setDetailMessage] = useState('')
   const [detailMap, setDetailMap] = useState({})
   const [detailOptions, setDetailOptions] = useState({ cables: [], benches: [] })
+
+  // Workout state
+  const [workoutId, setWorkoutId] = useState(null)
+  const [workoutName, setWorkoutName] = useState('')
+  const [exercises, setExercises] = useState([])
+  const [selectedExercises, setSelectedExercises] = useState(new Set())
+  const [condensedView, setCondensedView] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  // Modal state
   const [showImport, setShowImport] = useState(false)
   const [showDebug, setShowDebug] = useState(false)
   const [showPrompt, setShowPrompt] = useState(false)
+  const [importJson, setImportJson] = useState('')
+  const [promptText, setPromptText] = useState('')
 
+  const isEditMode = Boolean(workoutCode)
+
+  // Parse exercises into blocks (circuits + singles)
+  const workoutBlocks = useMemo(() => parseWorkoutBlocks(exercises), [exercises])
+
+  // Load library
   useEffect(() => {
     let isMounted = true
 
@@ -60,6 +185,46 @@ function Builder() {
     }
   }, [config, isAuthenticated])
 
+  // Load existing workout if editing
+  useEffect(() => {
+    let isMounted = true
+
+    const loadWorkout = async () => {
+      if (!isAuthenticated || !workoutCode) return
+
+      setStatus({ type: 'loading', message: 'Loading workout...' })
+      const response = await fetchWorkoutDetail(config, workoutCode)
+
+      if (!isMounted) return
+
+      if (response.unauthorized) {
+        clearAuth()
+        navigate('/settings', { replace: true })
+        return
+      }
+
+      if (!response.ok) {
+        setStatus({ type: 'error', message: response.error || 'Failed to load workout.' })
+        return
+      }
+
+      const normalized = normalizeExistingWorkout(response.data)
+      if (normalized) {
+        setWorkoutId(normalized.id)
+        setWorkoutName(normalized.name)
+        setExercises(normalized.exercises)
+      }
+      setStatus({ type: 'success', message: '' })
+    }
+
+    loadWorkout()
+
+    return () => {
+      isMounted = false
+    }
+  }, [config, isAuthenticated, workoutCode, clearAuth, navigate])
+
+  // Library filtering
   const baseExercises = useMemo(() => {
     const term = search.trim().toLowerCase()
     return (library.exercises || []).filter((exercise) => {
@@ -125,6 +290,7 @@ function Builder() {
     })
   }, [baseExercises, detailEnabled, detailCable, detailBench, fuzzyCable, detailMap])
 
+  // Detail filter data loading
   useEffect(() => {
     let isMounted = true
 
@@ -213,6 +379,332 @@ function Builder() {
     }
   }, [baseExercises, detailEnabled, isAuthenticated, config, detailMap])
 
+  // Exercise actions
+  const addExercise = useCallback((libraryExercise) => {
+    const newExercise = createExerciseFromLibrary(libraryExercise)
+    setExercises((prev) => [...prev, newExercise])
+  }, [])
+
+  const removeExercise = useCallback((exerciseId) => {
+    setExercises((prev) => prev.filter((ex) => ex.id !== exerciseId))
+    setSelectedExercises((prev) => {
+      const next = new Set(prev)
+      next.delete(exerciseId)
+      return next
+    })
+  }, [])
+
+  const updateExercise = useCallback((exerciseId, updates) => {
+    setExercises((prev) =>
+      prev.map((ex) => (ex.id === exerciseId ? { ...ex, ...updates } : ex))
+    )
+  }, [])
+
+  const addSet = useCallback((exerciseId, newSet) => {
+    setExercises((prev) =>
+      prev.map((ex) =>
+        ex.id === exerciseId ? { ...ex, sets: [...ex.sets, newSet] } : ex
+      )
+    )
+  }, [])
+
+  const removeSet = useCallback((exerciseId, setId) => {
+    setExercises((prev) =>
+      prev.map((ex) =>
+        ex.id === exerciseId
+          ? { ...ex, sets: ex.sets.filter((s) => s.id !== setId) }
+          : ex
+      )
+    )
+  }, [])
+
+  const updateSet = useCallback((exerciseId, setId, updates) => {
+    setExercises((prev) =>
+      prev.map((ex) =>
+        ex.id === exerciseId
+          ? {
+              ...ex,
+              sets: ex.sets.map((s) => (s.id === setId ? { ...s, ...updates } : s)),
+            }
+          : ex
+      )
+    )
+  }, [])
+
+  const toggleSelectExercise = useCallback((exerciseId) => {
+    setSelectedExercises((prev) => {
+      const next = new Set(prev)
+      if (next.has(exerciseId)) {
+        next.delete(exerciseId)
+      } else {
+        next.add(exerciseId)
+      }
+      return next
+    })
+  }, [])
+
+  const moveExercise = useCallback((exerciseId, direction) => {
+    setExercises((prev) => {
+      const index = prev.findIndex((ex) => ex.id === exerciseId)
+      if (index === -1) return prev
+      const newIndex = index + direction
+      if (newIndex < 0 || newIndex >= prev.length) return prev
+      const next = [...prev]
+      const [removed] = next.splice(index, 1)
+      next.splice(newIndex, 0, removed)
+      return next
+    })
+  }, [])
+
+  // Circuit actions
+  const handleMakeCircuit = useCallback(() => {
+    if (selectedExercises.size < 2) {
+      alert('Select at least 2 exercises to make a circuit.')
+      return
+    }
+    const indexes = []
+    exercises.forEach((ex, idx) => {
+      if (selectedExercises.has(ex.id)) {
+        indexes.push(idx)
+      }
+    })
+    const newExercises = replaceExercisesWithCircuit(exercises, indexes)
+    setExercises(newExercises)
+    setSelectedExercises(new Set())
+  }, [exercises, selectedExercises])
+
+  const handleUndoCircuit = useCallback(
+    (blockIndex) => {
+      const newExercises = undoCircuit(exercises, blockIndex)
+      setExercises(newExercises)
+    },
+    [exercises]
+  )
+
+  const handleRemoveCircuit = useCallback(
+    (blockIndex) => {
+      const newExercises = removeCircuit(exercises, blockIndex)
+      setExercises(newExercises)
+    },
+    [exercises]
+  )
+
+  const handleMoveCircuit = useCallback(
+    (blockIndex, direction) => {
+      const newExercises = moveCircuit(exercises, blockIndex, blockIndex + direction)
+      setExercises(newExercises)
+    },
+    [exercises]
+  )
+
+  const handleAddRound = useCallback(
+    (blockIndex) => {
+      const newExercises = appendSetToCircuit(exercises, blockIndex)
+      setExercises(newExercises)
+    },
+    [exercises]
+  )
+
+  const handleRemoveRound = useCallback(
+    (blockIndex) => {
+      const block = workoutBlocks[blockIndex]
+      if (block && block.rounds > 1) {
+        const newExercises = deleteSetFromCircuit(exercises, blockIndex, block.rounds - 1)
+        setExercises(newExercises)
+      }
+    },
+    [exercises, workoutBlocks]
+  )
+
+  const handleRemoveCircuitExercise = useCallback(
+    (blockIndex, exerciseIndex) => {
+      const newExercises = deleteExerciseFromCircuit(exercises, blockIndex, exerciseIndex)
+      setExercises(newExercises)
+    },
+    [exercises]
+  )
+
+  const handleUpdateCircuitExercise = useCallback(
+    (blockIndex, positionIndex, updates) => {
+      const block = workoutBlocks[blockIndex]
+      if (!block || block.type !== 'circuit') return
+
+      // Update all instances of this exercise position across rounds
+      setExercises((prev) => {
+        const newExercises = [...prev]
+        for (let round = 0; round < block.rounds; round++) {
+          const idx = block.start + positionIndex + round * block.cycleLen
+          if (newExercises[idx]) {
+            newExercises[idx] = { ...newExercises[idx], ...updates }
+            // If changing preset, also update sets
+            if (updates.preset_id !== undefined) {
+              newExercises[idx].sets = applyPresetToSets(
+                newExercises[idx].sets,
+                updates.preset_id
+              )
+            }
+          }
+        }
+        return newExercises
+      })
+    },
+    [workoutBlocks]
+  )
+
+  const handleUpdateCircuitSet = useCallback(
+    (blockIndex, positionIndex, roundIndex, setIndex, updates) => {
+      const block = workoutBlocks[blockIndex]
+      if (!block || block.type !== 'circuit') return
+
+      const exerciseIdx = block.start + positionIndex + roundIndex * block.cycleLen
+      setExercises((prev) => {
+        const newExercises = [...prev]
+        const exercise = newExercises[exerciseIdx]
+        if (exercise && exercise.sets[setIndex]) {
+          exercise.sets = exercise.sets.map((s, i) =>
+            i === setIndex ? { ...s, ...updates } : s
+          )
+          newExercises[exerciseIdx] = { ...exercise }
+        }
+        return newExercises
+      })
+    },
+    [workoutBlocks]
+  )
+
+  // Build API payload
+  const buildPayload = useCallback(() => {
+    return exercises.map((ex) => {
+      const reps = ex.sets.map((s) => String(s.reps)).join(',')
+      const isRM = ex.preset_id !== -1 && ex.preset_id !== 0
+
+      // For RM mode: weights field gets the RM value, counterweight2 also gets RM value
+      // For custom mode: weights field gets KG value (API stores in KG)
+      const weights = ex.sets.map((s) => String(s.weight)).join(',')
+      const breaks = ex.sets.map((s) => String(s.rest)).join(',')
+      const modes = ex.sets.map((s) => String(s.mode)).join(',')
+      const leftRight = ex.sets.map(() => '0').join(',')
+      const completion = ex.sets.map(() => '1').join(',')
+      const completionMethod = ex.sets.map(() => '1').join(',')
+      const countType = ex.sets.map(() => '1').join(',')
+      const level = ex.sets.map(() => '0').join(',')
+      // counterweight2 holds the RM value for preset modes
+      const counterWeight2 = isRM
+        ? ex.sets.map((s) => String(s.weight)).join(',')
+        : ex.sets.map(() => '0').join(',')
+
+      const capacity = ex.sets.reduce((sum, s) => sum + s.reps * s.weight, 0)
+
+      return {
+        groupId: ex.groupId,
+        actionLibraryId: ex.variant_id || ex.groupId,
+        templatePresetId: ex.preset_id,
+        setsAndReps: reps,
+        weights,
+        breakTime: breaks,
+        breakTime2: breaks,
+        sportMode: modes,
+        leftRight,
+        selectCompletionMethod: completion,
+        completionMethod,
+        countType,
+        level,
+        capacity,
+        counterweight2: counterWeight2,
+      }
+    })
+  }, [exercises])
+
+  // Save workout
+  const handleSave = async () => {
+    if (!workoutName.trim()) {
+      setSaveError('Please enter a workout name.')
+      return
+    }
+    if (exercises.length === 0) {
+      setSaveError('Please add at least one exercise.')
+      return
+    }
+
+    setSaving(true)
+    setSaveError('')
+
+    const payload = buildPayload()
+    const response = await saveWorkout(config, {
+      name: workoutName.trim(),
+      exercises: payload,
+      templateId: workoutId,
+    })
+
+    if (response.unauthorized) {
+      clearAuth()
+      navigate('/settings', { replace: true })
+      return
+    }
+
+    if (!response.ok) {
+      setSaveError(response.error || 'Failed to save workout.')
+      setSaving(false)
+      return
+    }
+
+    setSaving(false)
+    navigate('/')
+  }
+
+  // Import JSON
+  const handleImport = () => {
+    try {
+      const parsed = JSON.parse(importJson)
+      const imported = Array.isArray(parsed) ? parsed : parsed.exercises || []
+      const newExercises = imported.map((item) => ({
+        id: generateId(),
+        groupId: item.groupId || item.id,
+        title: item.title || item.name || 'Imported',
+        img: item.img || '',
+        category_name: '',
+        preset_id: item.preset_id ?? -1,
+        isUnilateral: item.isUnilateral || false,
+        sets: (item.sets || []).map((s) => ({
+          id: generateId(),
+          reps: s.reps || 10,
+          weight: s.weight || 20,
+          rest: s.rest || 60,
+          mode: s.mode || 1,
+          unit: s.unit || 'reps',
+        })),
+      }))
+      setExercises((prev) => [...prev, ...newExercises])
+      setShowImport(false)
+      setImportJson('')
+    } catch (e) {
+      alert('Invalid JSON format.')
+    }
+  }
+
+  // Export JSON
+  const exportJson = useMemo(() => {
+    return JSON.stringify(
+      {
+        name: workoutName,
+        exercises: exercises.map((ex) => ({
+          groupId: ex.groupId,
+          title: ex.title,
+          preset_id: ex.preset_id,
+          isUnilateral: ex.isUnilateral,
+          sets: ex.sets.map((s) => ({
+            reps: s.reps,
+            weight: s.weight,
+            rest: s.rest,
+            mode: s.mode,
+          })),
+        })),
+      },
+      null,
+      2
+    )
+  }, [workoutName, exercises])
+
   const showDeviceFilters = config.device_type === 2 && config.allow_monster_moves
 
   return (
@@ -236,14 +728,6 @@ function Builder() {
               <summary>Filters</summary>
               <div className="builder-details-body">
                 <label className="builder-checkbox">
-                  <input type="checkbox" />
-                  Full text (equipment, muscles, category)
-                </label>
-                <label className="builder-checkbox">
-                  <input type="checkbox" />
-                  Same equipment as previous
-                </label>
-                <label className="builder-checkbox">
                   <input
                     type="checkbox"
                     checked={detailEnabled}
@@ -254,20 +738,6 @@ function Builder() {
                 {detailMessage ? (
                   <div className="builder-muted">{detailMessage}</div>
                 ) : null}
-
-                <details className="builder-subdetails">
-                  <summary>Equipment filters</summary>
-                  <div className="builder-two-col">
-                    <div>
-                      <div className="builder-muted">Include</div>
-                      <div className="builder-placeholder">No equipment filters yet.</div>
-                    </div>
-                    <div>
-                      <div className="builder-muted">Exclude</div>
-                      <div className="builder-placeholder">No equipment filters yet.</div>
-                    </div>
-                  </div>
-                </details>
 
                 <div className="builder-subdetails">
                   <div className="builder-subdetails-title">Detail filters (cable height, bench angle)</div>
@@ -358,12 +828,21 @@ function Builder() {
             <div className="builder-list">
               {filteredExercises.map((exercise) => (
                 <div key={exercise.id} className="builder-item">
-                  <div className="builder-item-title">{exercise.title || 'Untitled'}</div>
-                  <div className="builder-item-meta">
-                    {exercise.category_name || 'Category'}
-                    {exercise.mainMuscleGroupName ? ` - ${exercise.mainMuscleGroupName}` : ''}
+                  {exercise.img ? (
+                    <img src={exercise.img} alt="" className="builder-item-img" />
+                  ) : null}
+                  <div className="builder-item-info">
+                    <div className="builder-item-title">{exercise.title || 'Untitled'}</div>
+                    <div className="builder-item-meta">
+                      {exercise.category_name || 'Category'}
+                      {exercise.mainMuscleGroupName ? ` - ${exercise.mainMuscleGroupName}` : ''}
+                    </div>
                   </div>
-                  <button type="button" className="btn btn-ghost builder-item-action">
+                  <button
+                    type="button"
+                    className="btn btn-ghost builder-item-action"
+                    onClick={() => addExercise(exercise)}
+                  >
                     Add
                   </button>
                 </div>
@@ -395,7 +874,7 @@ function Builder() {
                 <button className="btn btn-outline" type="button" onClick={() => setShowImport(true)}>
                   Import JSON
                 </button>
-                <button className="btn btn-outline" type="button">
+                <button className="btn btn-outline" type="button" onClick={() => setShowDebug(true)}>
                   Export JSON
                 </button>
               </div>
@@ -403,30 +882,105 @@ function Builder() {
           </details>
 
           <div className="builder-toolbar">
-            <input className="builder-title" placeholder="Workout name" />
+            <input
+              className="builder-title"
+              placeholder="Workout name"
+              value={workoutName}
+              onChange={(e) => setWorkoutName(e.target.value)}
+              onDoubleClick={() => {
+                console.group('Workout Debug')
+                console.log('Name:', workoutName)
+                console.log('Exercises:', exercises)
+                console.log('Blocks:', workoutBlocks)
+                console.log('Payload:', buildPayload())
+                console.groupEnd()
+              }}
+              title="Double-click to log workout JSON to console"
+            />
             <div className="builder-toolbar-actions">
               <label className="builder-checkbox">
-                <input type="checkbox" />
+                <input
+                  type="checkbox"
+                  checked={condensedView}
+                  onChange={(e) => setCondensedView(e.target.checked)}
+                />
                 Condensed view
               </label>
-              <button className="btn btn-ghost" type="button">
-                Make circuit from selected
+              <button
+                type="button"
+                className="btn btn-outline btn-sm builder-make-circuit"
+                onClick={handleMakeCircuit}
+                disabled={selectedExercises.size < 2}
+              >
+                Make Circuit ({selectedExercises.size})
               </button>
-              <button className="btn btn-ghost" type="button" onClick={() => setShowDebug(true)}>
-                Debug JSON
-              </button>
-              <span className="builder-muted">0 selected</span>
-              <span className="builder-muted">0 exercises</span>
-              <button className="btn btn-primary" type="button">
-                Save
+              <span className="builder-muted">{exercises.length} exercises</span>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? 'Saving...' : isEditMode ? 'Update' : 'Save'}
               </button>
             </div>
           </div>
 
+          {saveError ? (
+            <div className="notice notice-error">{saveError}</div>
+          ) : null}
+
           <div className="builder-canvas">
-            <div className="builder-empty">
-              Select exercises from the library to build a plan.
-            </div>
+            {exercises.length === 0 ? (
+              <div className="builder-empty">
+                Select exercises from the library to build a plan.
+              </div>
+            ) : (
+              <div className="builder-blocks">
+                {workoutBlocks.map((block, blockIndex) => {
+                  if (block.type === 'circuit') {
+                    return (
+                      <CircuitBlock
+                        key={`circuit-${block.start}`}
+                        block={block}
+                        blockIndex={blockIndex}
+                        condensed={condensedView}
+                        onUndoCircuit={handleUndoCircuit}
+                        onRemoveCircuit={handleRemoveCircuit}
+                        onMoveCircuit={handleMoveCircuit}
+                        onAddRound={handleAddRound}
+                        onRemoveRound={handleRemoveRound}
+                        onRemoveExercise={handleRemoveCircuitExercise}
+                        onUpdateExercise={handleUpdateCircuitExercise}
+                        onUpdateSet={handleUpdateCircuitSet}
+                        totalBlocks={workoutBlocks.length}
+                      />
+                    )
+                  }
+
+                  // Single exercise
+                  const exercise = block.exercise
+
+                  return (
+                    <ExerciseCard
+                      key={exercise.id}
+                      exercise={exercise}
+                      index={block.index}
+                      totalCount={exercises.length}
+                      isSelected={selectedExercises.has(exercise.id)}
+                      condensed={condensedView}
+                      onToggleSelect={toggleSelectExercise}
+                      onMove={moveExercise}
+                      onRemove={removeExercise}
+                      onUpdateExercise={updateExercise}
+                      onUpdateSet={updateSet}
+                      onAddSet={addSet}
+                      onRemoveSet={removeSet}
+                    />
+                  )
+                })}
+              </div>
+            )}
           </div>
         </section>
       </section>
@@ -435,12 +989,23 @@ function Builder() {
         <div className="builder-modal">
           <div className="builder-modal-card">
             <h3>Import Workout JSON</h3>
-            <textarea placeholder="Paste JSON..." />
+            <textarea
+              placeholder="Paste JSON..."
+              value={importJson}
+              onChange={(e) => setImportJson(e.target.value)}
+            />
             <div className="builder-modal-actions">
-              <button className="btn btn-ghost" type="button" onClick={() => setShowImport(false)}>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => {
+                  setShowImport(false)
+                  setImportJson('')
+                }}
+              >
                 Cancel
               </button>
-              <button className="btn btn-primary" type="button">
+              <button className="btn btn-primary" type="button" onClick={handleImport}>
                 Import
               </button>
             </div>
@@ -451,13 +1016,19 @@ function Builder() {
       {showDebug ? (
         <div className="builder-modal">
           <div className="builder-modal-card builder-modal-wide">
-            <h3>Workout Debug JSON</h3>
-            <textarea readOnly value="{}" />
+            <h3>Workout JSON</h3>
+            <textarea readOnly value={exportJson} />
             <div className="builder-modal-actions">
               <button className="btn btn-ghost" type="button" onClick={() => setShowDebug(false)}>
                 Close
               </button>
-              <button className="btn btn-outline" type="button">
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(exportJson)
+                }}
+              >
                 Copy JSON
               </button>
             </div>
@@ -469,9 +1040,20 @@ function Builder() {
         <div className="builder-modal">
           <div className="builder-modal-card builder-modal-wide">
             <h3>Generate AI Prompt</h3>
-            <textarea placeholder="Describe the workout you want..." />
+            <textarea
+              placeholder="Describe the workout you want..."
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+            />
             <div className="builder-modal-actions">
-              <button className="btn btn-ghost" type="button" onClick={() => setShowPrompt(false)}>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => {
+                  setShowPrompt(false)
+                  setPromptText('')
+                }}
+              >
                 Cancel
               </button>
               <button className="btn btn-primary" type="button">

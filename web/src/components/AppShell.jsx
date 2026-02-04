@@ -1,36 +1,33 @@
-import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
-import { useAuth } from '../state/AuthContext.jsx'
+import { NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
+import { useAuth } from "../state/AuthContext.jsx";
 
 const navItems = [
-  { to: '/', label: 'Dashboard', end: true },
-  { to: '/library', label: 'Library' },
-  { to: '/history', label: 'History' },
-  { to: '/create', label: 'Builder' },
-  { to: '/settings', label: 'Settings' },
-]
+  { to: "/", label: "Workouts", end: true },
+  { to: "/library", label: "Library" },
+  { to: "/history", label: "History" },
+  { to: "/create", label: "Builder" },
+  { to: "/settings", label: "Settings" },
+];
 
 function AppShell() {
-  const { isAuthenticated } = useAuth()
-  const location = useLocation()
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
 
-  if (!isAuthenticated && location.pathname !== '/settings') {
-    return <Navigate to="/settings" replace />
+  if (!isAuthenticated && location.pathname !== "/settings") {
+    return <Navigate to="/settings" replace />;
   }
 
   return (
     <div className="app">
-      <div className="announcement">
-        <span className="announcement-pill">Local-first</span>
-        <span className="announcement-text">Your training data stays in this browser by default.</span>
-      </div>
-
       <header className="app-header">
         <div className="container header-content">
           <div className="brand">
             <div className="brand-mark">WM</div>
             <div>
               <div className="brand-title">Workout Manager</div>
-              <div className="brand-subtitle">Plan, schedule, and refine sessions without the noise.</div>
+              <div className="brand-subtitle">
+                Plan, schedule, and refine sessions without the noise.
+              </div>
             </div>
           </div>
 
@@ -40,7 +37,9 @@ function AppShell() {
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+                className={({ isActive }) =>
+                  `nav-link${isActive ? " active" : ""}`
+                }
               >
                 {item.label}
               </NavLink>
@@ -52,7 +51,7 @@ function AppShell() {
               New Plan
             </NavLink>
             <NavLink to="/settings" className="btn btn-outline">
-              {isAuthenticated ? 'Connected' : 'Connect'}
+              {isAuthenticated ? "Connected" : "Connect"}
             </NavLink>
           </div>
         </div>
@@ -64,7 +63,8 @@ function AppShell() {
 
       <footer className="app-footer container">
         <div>
-          Built for local use, offline-ready caching, and flexible scheduling.
+          All data moves directly from Speediance to your browser. No
+          third-party servers involved.
         </div>
         <div className="footer-links">
           <span>Version: in-progress</span>
@@ -73,7 +73,7 @@ function AppShell() {
         </div>
       </footer>
     </div>
-  )
+  );
 }
 
-export default AppShell
+export default AppShell;

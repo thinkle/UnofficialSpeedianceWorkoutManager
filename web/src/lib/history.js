@@ -293,6 +293,113 @@ function normalizeHistoryEntries(entries, unit) {
   return normalized
 }
 
+/**
+ * Get a signature for a history exercise (using actionLibraryId for matching)
+ */
+function historyExerciseSignature(exercise) {
+  return String(exercise.actionLibraryId || exercise.id || exercise.name)
+}
+
+/**
+ * Detect a circuit pattern in history exercises starting at a given index
+ */
+function detectHistoryCircuitAtIndex(exercises, startIndex, maxCycle = 8) {
+  const signatures = exercises.map(historyExerciseSignature)
+  const remaining = exercises.length - startIndex
+  const maxLen = Math.min(maxCycle, Math.floor(remaining / 2))
+
+  for (let cycleLen = 2; cycleLen <= maxLen; cycleLen += 1) {
+    const cycleSignatures = signatures.slice(startIndex, startIndex + cycleLen)
+    const distinct = new Set(cycleSignatures)
+
+    // Need at least 2 different exercises to form a circuit
+    if (distinct.size < 2) continue
+
+    // Check if the pattern repeats at least once
+    let matches = true
+    for (let i = 0; i < cycleLen; i += 1) {
+      if (signatures[startIndex + i] !== signatures[startIndex + cycleLen + i]) {
+        matches = false
+        break
+      }
+    }
+    if (!matches) continue
+
+    // Count how many rounds we have
+    let rounds = 2
+    while (startIndex + (rounds + 1) * cycleLen <= exercises.length) {
+      let roundMatches = true
+      for (let i = 0; i < cycleLen; i += 1) {
+        if (signatures[startIndex + i] !== signatures[startIndex + rounds * cycleLen + i]) {
+          roundMatches = false
+          break
+        }
+      }
+      if (!roundMatches) break
+      rounds += 1
+    }
+
+    return { cycleLen, rounds, length: cycleLen * rounds }
+  }
+
+  return null
+}
+
+/**
+ * Build circuit blocks from history exercises
+ * Groups exercises into circuits (supersets) and singles
+ */
+function buildHistoryBlocks(exercises, exerciseRows, maxCycle = 8) {
+  const blocks = []
+  let i = 0
+
+  while (i < exercises.length) {
+    const detected = detectHistoryCircuitAtIndex(exercises, i, maxCycle)
+    if (detected) {
+      // Build grouped exercises for the circuit
+      // Each entry in circuitExercises is one unique exercise with all its rounds
+      const circuitExercises = []
+      for (let order = 0; order < detected.cycleLen; order += 1) {
+        const roundData = []
+        for (let round = 0; round < detected.rounds; round += 1) {
+          const idx = i + round * detected.cycleLen + order
+          roundData.push({
+            exerciseRow: exerciseRows[idx],
+            raw: exercises[idx],
+            roundIndex: round,
+          })
+        }
+        // Use the first occurrence's name/img for the circuit entry
+        const firstExercise = exercises[i + order]
+        circuitExercises.push({
+          name: firstExercise.actionLibraryName || firstExercise.name || 'Exercise',
+          img: firstExercise.img,
+          rounds: roundData,
+        })
+      }
+
+      blocks.push({
+        type: 'circuit',
+        rounds: detected.rounds,
+        cycleLen: detected.cycleLen,
+        exercises: circuitExercises,
+      })
+      i += detected.length
+      continue
+    }
+
+    // Single exercise (not part of a circuit)
+    blocks.push({
+      type: 'single',
+      exercise: exerciseRows[i],
+      raw: exercises[i],
+    })
+    i += 1
+  }
+
+  return blocks
+}
+
 function normalizeDetail(detail, unit) {
   const unitLabel = unit === 1 ? 'lbs' : 'kg'
   const title = extractFirstValue(detail, ['templateName', 'name', 'title', 'workoutName']) || 'Workout'
@@ -388,10 +495,14 @@ function normalizeDetail(detail, unit) {
 
     return {
       name,
+      img: extractFirstValue(exercise, ['img', 'image', 'imageUrl']),
       metrics: rowMetrics,
       sets: setRows,
     }
   })
+
+  // Build circuit blocks for display
+  const blocks = buildHistoryBlocks(exercises, exerciseRows)
 
   return {
     title,
@@ -400,14 +511,25 @@ function normalizeDetail(detail, unit) {
     device: deviceLabel,
     metrics,
     exercises: exerciseRows,
+    blocks,
   }
 }
 
 export async function fetchHistoryRecords(config, startDate, endDate) {
+  // The API treats endDate as exclusive (up to midnight at the start of that day).
+  // To include workouts from the end date, we need to add one day.
+  let adjustedEndDate = endDate
+  if (endDate && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    const endDateObj = new Date(endDate + 'T00:00:00')
+    endDateObj.setDate(endDateObj.getDate() + 1)
+    const pad = (num) => String(num).padStart(2, '0')
+    adjustedEndDate = `${endDateObj.getFullYear()}-${pad(endDateObj.getMonth() + 1)}-${pad(endDateObj.getDate())}`
+  }
+
   const response = await speedianceRequest({
     path: '/api/mobile/v2/report/userTrainingDataRecord',
     method: 'GET',
-    query: { startDate, endDate },
+    query: { startDate, endDate: adjustedEndDate },
     config,
   })
 

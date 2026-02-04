@@ -70,3 +70,60 @@ export async function scheduleWorkout(config, dateStr, templateCode, status) {
 
   return { ok: true, data: response.data }
 }
+
+export async function fetchWorkoutDetail(config, code) {
+  const response = await speedianceRequest({
+    path: '/api/app/v3/customTrainingTemplate/detailByCode',
+    method: 'GET',
+    query: { code },
+    config,
+  })
+
+  if (!response.ok) {
+    return response
+  }
+
+  return { ok: true, data: response.data }
+}
+
+export async function deleteWorkout(config, templateId) {
+  const response = await speedianceRequest({
+    path: '/api/app/customTrainingTemplate',
+    method: 'DELETE',
+    query: { ids: templateId },
+    config,
+  })
+
+  if (!response.ok) {
+    return response
+  }
+
+  return { ok: true, data: response.data }
+}
+
+export async function saveWorkout(config, { name, exercises, templateId }) {
+  const body = {
+    name,
+    actionLibraryList: exercises,
+    totalCapacity: exercises.reduce((sum, ex) => sum + (ex.capacity || 0), 0),
+    deviceType: config.device_type,
+    bgColor: 0,
+  }
+
+  if (templateId) {
+    body.id = parseInt(templateId, 10)
+  }
+
+  const response = await speedianceRequest({
+    path: '/api/app/v2/customTrainingTemplate',
+    method: 'POST',
+    body,
+    config,
+  })
+
+  if (!response.ok) {
+    return response
+  }
+
+  return { ok: true, data: response.data }
+}
