@@ -19,6 +19,37 @@ import { applyPresetToSets } from '../lib/presets.js'
 
 const DETAIL_FETCH_LIMIT = 75
 
+const EXERCISE_MARKER = '\n\n--- Available exercises (auto-appended by Generate — edit above freely) ---'
+
+const DEFAULT_PROMPT_TEMPLATE = `You are a fitness coach. Create a structured workout plan as JSON.
+
+User request: TYPE YOUR GOAL HERE
+
+Instructions:
+- Only use exercises from the list (use the exact groupId)
+- Include 3 sets per exercise with realistic weights
+- preset_id: -1=Custom weight (kg), 1=Gain Muscle, 3=Stamina, 5=Strength
+- mode: 1=Standard, 2=Chains, 3=Eccentric
+- unit: "reps" or "sec"
+
+Return ONLY valid JSON in exactly this format (no explanation, no markdown fences):
+{
+  "name": "My Workout",
+  "exercises": [
+    {
+      "groupId": 123456,
+      "title": "Example Exercise",
+      "preset_id": -1,
+      "isUnilateral": false,
+      "sets": [
+        { "reps": 10, "weight": 20, "rest": 60, "mode": 1, "unit": "reps" },
+        { "reps": 10, "weight": 20, "rest": 60, "mode": 1, "unit": "reps" },
+        { "reps": 10, "weight": 20, "rest": 60, "mode": 1, "unit": "reps" }
+      ]
+    }
+  ]
+}`
+
 function pickEquipmentName(exercise) {
   return exercise.equipment_name || ''
 }
@@ -163,7 +194,7 @@ function Builder() {
   const [showDebug, setShowDebug] = useState(false)
   const [showPrompt, setShowPrompt] = useState(false)
   const [importJson, setImportJson] = useState('')
-  const [promptText, setPromptText] = useState('')
+  const [promptText, setPromptText] = useState(DEFAULT_PROMPT_TEMPLATE)
 
   const isEditMode = Boolean(workoutCode)
 
@@ -686,7 +717,10 @@ function Builder() {
   // Import JSON
   const handleImport = () => {
     try {
-      const parsed = JSON.parse(importJson)
+      const sanitized = importJson
+        .replace(/[\u201C\u201D]/g, '"') // " "  → "
+        .replace(/[\u2018\u2019]/g, "'") // ' '  → '
+      const parsed = JSON.parse(sanitized)
       const imported = Array.isArray(parsed) ? parsed : parsed.exercises || []
       const newExercises = imported.map((item) => ({
         id: generateId(),
@@ -712,6 +746,32 @@ function Builder() {
       alert('Invalid JSON format.')
     }
   }
+
+  // Generate AI prompt
+  const promptPool = useMemo(
+    () => (baseExercises.length > 0 ? baseExercises : (library.exercises || [])),
+    [baseExercises, library.exercises]
+  )
+
+  const handleGeneratePrompt = useCallback(() => {
+    const exerciseList = promptPool.map((ex) => ({
+      groupId: ex.id,
+      title: ex.title,
+      category: ex.category_name || '',
+      equipment: ex.equipment_name || '',
+      muscles: ex.mainMuscleGroupName || '',
+    }))
+
+    // Strip any previously appended exercise section, then append the fresh one
+    const instructionPart = promptText.includes(EXERCISE_MARKER)
+      ? promptText.split(EXERCISE_MARKER)[0]
+      : promptText
+
+    const exerciseSection = `\nTotal: ${exerciseList.length} exercises\n` +
+      JSON.stringify(exerciseList, null, 2)
+
+    setPromptText(instructionPart + EXERCISE_MARKER + exerciseSection)
+  }, [promptText, promptPool])
 
   // Export JSON
   const exportJson = useMemo(() => {
@@ -1083,8 +1143,12 @@ function Builder() {
         <div className="builder-modal">
           <div className="builder-modal-card builder-modal-wide">
             <h3>Generate AI Prompt</h3>
+            <div className="builder-muted">
+              Edit the instructions below freely, then click <strong>Append Exercises</strong> to attach the exercise list ({promptPool.length} exercises from current filters
+              {promptPool.length > 200 ? ' — filter by category or equipment to narrow' : ''}).
+              Paste the result into ChatGPT or Claude, then use Import JSON with the response.
+            </div>
             <textarea
-              placeholder="Describe the workout you want..."
               value={promptText}
               onChange={(e) => setPromptText(e.target.value)}
             />
@@ -1094,13 +1158,27 @@ function Builder() {
                 type="button"
                 onClick={() => {
                   setShowPrompt(false)
-                  setPromptText('')
+                  setPromptText(DEFAULT_PROMPT_TEMPLATE)
                 }}
               >
-                Cancel
+                Close
               </button>
-              <button className="btn btn-primary" type="button">
-                Generate Prompt
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => setPromptText(DEFAULT_PROMPT_TEMPLATE)}
+              >
+                Reset
+              </button>
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={() => navigator.clipboard.writeText(promptText)}
+              >
+                Copy
+              </button>
+              <button className="btn btn-primary" type="button" onClick={handleGeneratePrompt}>
+                Append Exercises
               </button>
             </div>
           </div>
