@@ -250,8 +250,8 @@ function Settings() {
                   setPrefsForm((current) => ({ ...current, deviceType: event.target.value }))
                 }
               >
-                <option value="1">Device type 1</option>
-                <option value="2">Device type 2</option>
+                <option value="1">Gym Monster</option>
+                <option value="2">Gym Pal</option>
               </select>
             </label>
             <label className="form-field">

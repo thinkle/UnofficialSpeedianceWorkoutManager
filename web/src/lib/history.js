@@ -236,8 +236,8 @@ function normalizeHistoryEntries(entries, unit) {
     const deviceType = extractFirstValue(entry, ['deviceType', 'device_type'])
     let deviceLabel = null
     if (deviceType !== null && deviceType !== undefined) {
-      if (String(deviceType) === '1') deviceLabel = 'Device Type 1'
-      else if (String(deviceType) === '2') deviceLabel = 'Device Type 2'
+      if (String(deviceType) === '1') deviceLabel = 'Gym Monster'
+      else if (String(deviceType) === '2') deviceLabel = 'Gym Pal'
       else deviceLabel = String(deviceType)
     }
 
@@ -419,8 +419,8 @@ function normalizeDetail(detail, unit) {
   const deviceType = extractFirstValue(detail, ['deviceType', 'device_type'])
   let deviceLabel = null
   if (deviceType !== null && deviceType !== undefined) {
-    if (String(deviceType) === '1') deviceLabel = 'Device Type 1'
-    else if (String(deviceType) === '2') deviceLabel = 'Device Type 2'
+    if (String(deviceType) === '1') deviceLabel = 'Gym Monster'
+    else if (String(deviceType) === '2') deviceLabel = 'Gym Pal'
     else deviceLabel = String(deviceType)
   }
 

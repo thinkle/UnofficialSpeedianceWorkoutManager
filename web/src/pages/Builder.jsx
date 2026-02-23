@@ -19,6 +19,19 @@ import { applyPresetToSets } from '../lib/presets.js'
 
 const DETAIL_FETCH_LIMIT = 75
 
+function pickEquipmentName(exercise) {
+  return exercise.equipment_name || ''
+}
+
+function scoreRelevance(exercise, words) {
+  const titleLower = (exercise.title || '').toLowerCase()
+  let score = 0
+  for (const word of words) {
+    if (titleLower.includes(word)) score += 2
+  }
+  return score
+}
+
 function formatCablePosition(value) {
   if (value === 'unknown') return 'Unknown'
   const numeric = Number(value)
@@ -126,6 +139,7 @@ function Builder() {
   const [search, setSearch] = useState('')
   const [categoryId, setCategoryId] = useState('all')
   const [deviceFilter, setDeviceFilter] = useState('all')
+  const [equipmentFilter, setEquipmentFilter] = useState('all')
   const [detailEnabled, setDetailEnabled] = useState(false)
   const [detailCable, setDetailCable] = useState('all')
   const [detailBench, setDetailBench] = useState('all')
@@ -225,14 +239,28 @@ function Builder() {
   }, [config, isAuthenticated, workoutCode, clearAuth, navigate])
 
   // Library filtering
+  const equipmentOptions = useMemo(() => {
+    const names = new Set()
+    ;(library.exercises || []).forEach((ex) => {
+      const name = pickEquipmentName(ex)
+      if (name) names.add(name)
+    })
+    return Array.from(names).sort()
+  }, [library.exercises])
+
   const baseExercises = useMemo(() => {
     const term = search.trim().toLowerCase()
-    return (library.exercises || []).filter((exercise) => {
+    const words = term ? term.split(/\s+/).filter(Boolean) : []
+
+    const matched = (library.exercises || []).filter((exercise) => {
       if (categoryId !== 'all') {
         const categories = String(categoryId).split(',').map((value) => value.trim())
         if (!categories.includes(String(exercise.category_id))) {
           return false
         }
+      }
+      if (equipmentFilter !== 'all') {
+        if (pickEquipmentName(exercise) !== equipmentFilter) return false
       }
       if (deviceFilter !== 'all') {
         const devices = String(exercise.device_type_tag || exercise.device_type || '')
@@ -242,7 +270,7 @@ function Builder() {
           return false
         }
       }
-      if (!term) return true
+      if (words.length === 0) return true
       const haystack = [
         exercise.title,
         exercise.category_name,
@@ -252,9 +280,12 @@ function Builder() {
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
-      return haystack.includes(term)
+      return words.every((word) => haystack.includes(word))
     })
-  }, [library.exercises, search, categoryId, deviceFilter])
+
+    if (words.length === 0) return matched
+    return matched.sort((a, b) => scoreRelevance(b, words) - scoreRelevance(a, words))
+  }, [library.exercises, search, categoryId, equipmentFilter, deviceFilter])
 
   const filteredExercises = useMemo(() => {
     if (!detailEnabled || (detailCable === 'all' && detailBench === 'all')) {
@@ -799,12 +830,24 @@ function Builder() {
               ))}
             </select>
 
+            <select
+              className="builder-select builder-select-wide"
+              value={equipmentFilter}
+              onChange={(event) => setEquipmentFilter(event.target.value)}
+              disabled={!isAuthenticated}
+            >
+              <option value="all">All Equipment</option>
+              {equipmentOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+
             {showDeviceFilters ? (
               <div className="builder-device-row">
                 {[
                   { id: 'all', label: 'All Devices' },
-                  { id: '2', label: 'Device Type 2' },
-                  { id: '1', label: 'Device Type 1' },
+                  { id: '2', label: 'Gym Pal' },
+                  { id: '1', label: 'Gym Monster' },
                 ].map((option) => (
                   <button
                     key={option.id}
