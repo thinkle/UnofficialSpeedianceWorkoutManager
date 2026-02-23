@@ -63,13 +63,11 @@ function AppShell() {
 
       <footer className="app-footer container">
         <div>
-          All data moves directly from Speediance to your browser. No
-          third-party servers involved.
+          No personal data is stored. API calls are relayed through our server
+          to avoid CORS restrictions.
         </div>
         <div className="footer-links">
-          <span>Version: in-progress</span>
-          <span className="dot">|</span>
-          <span>Netlify target</span>
+          <span>Built: {new Date(__BUILD_TIME__).toLocaleString()}</span>
         </div>
       </footer>
     </div>
