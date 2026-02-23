@@ -53,7 +53,7 @@ export function saveCache(key, data) {
 
 export function buildLibraryCacheKey({ region, deviceType, allowMonsterMoves }) {
   const allowFlag = allowMonsterMoves ? 1 : 0
-  return `library.${region}.device${deviceType}.allow${allowFlag}`
+  return `library.v2.${region}.device${deviceType}.allow${allowFlag}`
 }
 
 export function buildExerciseCacheKey({ region, deviceType, allowMonsterMoves, exerciseId }) {

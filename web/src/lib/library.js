@@ -108,6 +108,27 @@ async function fetchCategories(config, deviceTypes) {
   return results
 }
 
+async function fetchAccessoryMap(config) {
+  const response = await speedianceRequest({
+    path: '/api/app/accessories/list',
+    method: 'GET',
+    config,
+  })
+  if (!response.ok) {
+    debugError('Failed to load accessories', { response })
+    return {}
+  }
+  const accessories = response.data || []
+  const map = {}
+  accessories.forEach((acc) => {
+    if (acc.id != null) {
+      map[String(acc.id)] = acc.nameEn || acc.nameEN || acc.name || String(acc.id)
+    }
+  })
+  debugLog('Loaded accessories', { count: accessories.length })
+  return map
+}
+
 async function fetchLibraryGroups(config, categoriesByDevice) {
   const allExercises = []
 
@@ -211,12 +232,21 @@ export async function fetchLibrary(config) {
           filter_ids: String(category.id),
         })) || []
 
-  const rawExercises = await fetchLibraryGroups(config, categoriesByDevice)
+  const [rawExercises, accessoryMap] = await Promise.all([
+    fetchLibraryGroups(config, categoriesByDevice),
+    fetchAccessoryMap(config),
+  ])
   const uniqueMap = dedupeExercises(rawExercises)
-  const exercises = Array.from(uniqueMap.values()).map((exercise) => ({
-    ...exercise,
-    device_type_tag: (exercise.device_type_list || []).filter(Boolean).join(','),
-  }))
+  const exercises = Array.from(uniqueMap.values()).map((exercise) => {
+    const accIds = String(exercise.accessories || '').split(',').filter(Boolean)
+    const accNames = accIds.map((id) => accessoryMap[id]).filter(Boolean)
+    const equipment_name = accNames.length > 0 ? accNames.join(', ') : 'Standard'
+    return {
+      ...exercise,
+      device_type_tag: (exercise.device_type_list || []).filter(Boolean).join(','),
+      equipment_name,
+    }
+  })
   debugLog('Library dedupe complete', {
     raw: rawExercises.length,
     unique: exercises.length,
