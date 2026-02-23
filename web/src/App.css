@@ -587,14 +587,21 @@
 }
 
 .builder-page {
-  gap: 24px;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .builder-shell {
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
   gap: 24px;
-  min-height: 70vh;
+  flex: 1;
+  min-height: 0;
 }
 
 .builder-panel {
@@ -608,7 +615,7 @@
 }
 
 .builder-panel-left {
-  min-height: 60vh;
+  min-height: 0;
 }
 
 .builder-panel-header {
@@ -623,6 +630,8 @@
   overflow-y: auto;
   display: grid;
   gap: 16px;
+  flex: 1;
+  min-height: 0;
 }
 
 .builder-input {
@@ -842,6 +851,7 @@
 
 .builder-canvas {
   flex: 1;
+  min-height: 0;
   padding: 16px;
   border-radius: 12px;
   border: 1px dashed rgba(35, 48, 66, 0.6);
@@ -1053,10 +1063,30 @@
   gap: 10px;
 }
 
+.dashboard-page {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .dashboard-layout {
   display: grid;
   grid-template-columns: minmax(300px, 1fr) minmax(0, 2fr);
   gap: 24px;
+  flex: 1;
+  min-height: 0;
+}
+
+.dashboard-workouts {
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .dashboard-toolbar {
@@ -1177,6 +1207,8 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .calendar-header {
@@ -1891,4 +1923,20 @@
   color: var(--accent-2);
   background: rgba(94, 234, 212, 0.1);
   border-color: rgba(94, 234, 212, 0.3);
+}
+
+/* Builder + Dashboard: lock to viewport height so panels scroll independently */
+.app:has(.builder-page),
+.app:has(.dashboard-page) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.app-main:has(.builder-page),
+.app-main:has(.dashboard-page) {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }

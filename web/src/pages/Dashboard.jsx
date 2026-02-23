@@ -380,7 +380,7 @@ function Dashboard() {
   };
 
   return (
-    <div className="page">
+    <div className="page dashboard-page">
       <section className="page-header">
         <div>
           <p className="eyebrow"></p>
