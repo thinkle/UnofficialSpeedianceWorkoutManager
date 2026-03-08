@@ -48,6 +48,14 @@
   - Added `/edit/:workoutCode` route for editing existing workouts
   - Added Edit and Delete buttons to workout cards on Dashboard
   - Added "New Workout" button to Dashboard
+- 2026-03-08: Added smart equipment filtering with grouped checkboxes:
+  - Created `equipmentGroups.js` with configurable equipment groups (Bench Type, Attachments)
+  - Implemented smart OR/AND logic: OR within groups, AND between groups
+  - Added compatibility rules (adjustable bench matches flat bench exercises)
+  - Built `EquipmentFilter` component with expandable sections and selection badges
+  - Replaced single equipment dropdown in Builder with multi-select grouped filter
+  - Added comprehensive CSS styling for the new filter UI
+  - Filter now clearly displays "Within each category uses OR logic. Between categories uses AND logic."
   - Rebuilt Builder component with full workout editing functionality:
     - Load existing workout for edit mode
     - Add/remove exercises from library
