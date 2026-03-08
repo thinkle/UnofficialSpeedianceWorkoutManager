@@ -694,6 +694,16 @@
 .builder-subdetails-title {
   font-weight: 600;
   color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.builder-subdetails-title > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .builder-two-col {
@@ -749,11 +759,8 @@
 
 /* Equipment Filter Styles */
 .equipment-filter {
-  border: 1px solid rgba(35, 48, 66, 0.8);
-  border-radius: 12px;
-  background: rgba(12, 18, 28, 0.8);
-  padding: 12px;
-  margin: 10px 0;
+  display: grid;
+  gap: 0;
 }
 
 .equipment-filter-header {

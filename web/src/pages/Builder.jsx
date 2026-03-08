@@ -880,22 +880,74 @@ function Builder() {
             <details className="builder-details">
               <summary>Filters</summary>
               <div className="builder-details-body">
-                <label className="builder-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={detailEnabled}
-                    onChange={(event) => setDetailEnabled(event.target.checked)}
-                  />
-                  Enable detailed filtering
-                </label>
-                {detailMessage ? (
-                  <div className="builder-muted">{detailMessage}</div>
-                ) : null}
+                <div className="builder-subdetails">
+                  <div className="builder-subdetails-title">Category</div>
+                  <select
+                    className="builder-select builder-select-wide"
+                    value={categoryId}
+                    onChange={(event) => setCategoryId(event.target.value)}
+                    disabled={!isAuthenticated}
+                  >
+                    <option value="all">All Categories</option>
+                    {(library.categories || []).map((category) => (
+                      <option
+                        key={category.id}
+                        value={category.filter_ids || category.id}
+                      >
+                        {category.displayName || category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
                 <div className="builder-subdetails">
                   <div className="builder-subdetails-title">
-                    Detail filters (cable height, bench angle)
+                    <span>
+                      Equipment
+                      {Object.values(equipmentFilter).some(
+                        (s) => s.size > 0,
+                      ) && (
+                        <span className="equipment-filter-badge">
+                          {Object.values(equipmentFilter).reduce(
+                            (n, s) => n + s.size,
+                            0,
+                          )}
+                        </span>
+                      )}
+                    </span>
+                    {Object.values(equipmentFilter).some((s) => s.size > 0) && (
+                      <button
+                        type="button"
+                        className="equipment-filter-clear"
+                        onClick={() => setEquipmentFilter({})}
+                        disabled={!isAuthenticated}
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
+                  <EquipmentFilter
+                    selectedFilters={equipmentFilter}
+                    onChange={setEquipmentFilter}
+                    disabled={!isAuthenticated}
+                  />
+                </div>
+
+                <div className="builder-subdetails">
+                  <div className="builder-subdetails-title">Advanced</div>
+                  <label className="builder-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={detailEnabled}
+                      onChange={(event) =>
+                        setDetailEnabled(event.target.checked)
+                      }
+                    />
+                    Enable detailed filtering
+                  </label>
+                  {detailMessage ? (
+                    <div className="builder-muted">{detailMessage}</div>
+                  ) : null}
                   <label className="builder-checkbox">
                     <input
                       type="checkbox"
@@ -939,51 +991,27 @@ function Builder() {
                       ? "Loading detail filters..."
                       : "Detail filters auto-load when base filters are active."}
                   </div>
+                  {showDeviceFilters ? (
+                    <div className="builder-device-row">
+                      {[
+                        { id: "all", label: "All Devices" },
+                        { id: "2", label: "Gym Pal" },
+                        { id: "1", label: "Gym Monster" },
+                      ].map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          className={`builder-chip${deviceFilter === option.id ? " builder-chip-active" : ""}`}
+                          onClick={() => setDeviceFilter(option.id)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </details>
-
-            <select
-              className="builder-select builder-select-wide"
-              value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-              disabled={!isAuthenticated}
-            >
-              <option value="all">All Categories</option>
-              {(library.categories || []).map((category) => (
-                <option
-                  key={category.id}
-                  value={category.filter_ids || category.id}
-                >
-                  {category.displayName || category.name}
-                </option>
-              ))}
-            </select>
-
-            <EquipmentFilter
-              selectedFilters={equipmentFilter}
-              onChange={setEquipmentFilter}
-              disabled={!isAuthenticated}
-            />
-
-            {showDeviceFilters ? (
-              <div className="builder-device-row">
-                {[
-                  { id: "all", label: "All Devices" },
-                  { id: "2", label: "Gym Pal" },
-                  { id: "1", label: "Gym Monster" },
-                ].map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    className={`builder-chip${deviceFilter === option.id ? " builder-chip-active" : ""}`}
-                    onClick={() => setDeviceFilter(option.id)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
 
             {status.type === "loading" ? (
               <div className="notice notice-loading">{status.message}</div>

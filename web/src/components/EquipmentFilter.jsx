@@ -51,33 +51,10 @@ function EquipmentFilter({ selectedFilters, onChange, disabled = false }) {
     );
   };
 
-  const clearAll = () => {
-    onChange({});
-  };
-
   const selectedCount = getSelectedCount();
 
   return (
     <div className="equipment-filter">
-      <div className="equipment-filter-header">
-        <span className="equipment-filter-title">
-          Equipment Filters
-          {selectedCount > 0 && (
-            <span className="equipment-filter-badge">{selectedCount}</span>
-          )}
-        </span>
-        {selectedCount > 0 && (
-          <button
-            type="button"
-            className="equipment-filter-clear"
-            onClick={clearAll}
-            disabled={disabled}
-          >
-            Clear all
-          </button>
-        )}
-      </div>
-
       {EQUIPMENT_GROUPS.map((group) => {
         const isExpanded = expandedGroups.has(group.id);
         const groupSelectedIds = selectedFilters[group.id] || new Set();
