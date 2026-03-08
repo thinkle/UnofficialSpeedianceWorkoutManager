@@ -1,0 +1,71 @@
+{
+“name”: “My Workout”,
+“exercises”: [
+{
+“groupId”: 424195974561793,
+“title”: “Standing Barbell Chest Press”,
+“preset_id”: 1,
+“isUnilateral”: false,
+“sets”: [
+{ “reps”: 12, “weight”: 25, “rest”: 75, “mode”: 1, “unit”: “reps” },
+{ “reps”: 10, “weight”: 27.5, “rest”: 75, “mode”: 1, “unit”: “reps” },
+{ “reps”: 8, “weight”: 30, “rest”: 90, “mode”: 1, “unit”: “reps” }
+]
+},
+{
+“groupId”: 321,
+“title”: “Barbell Bent Over Row”,
+“preset_id”: 1,
+“isUnilateral”: false,
+“sets”: [
+{ “reps”: 12, “weight”: 30, “rest”: 75, “mode”: 1, “unit”: “reps” },
+{ “reps”: 10, “weight”: 32.5, “rest”: 75, “mode”: 1, “unit”: “reps” },
+{ “reps”: 8, “weight”: 35, “rest”: 90, “mode”: 1, “unit”: “reps” }
+]
+},
+{
+“groupId”: 310,
+“title”: “Standing Barbell Shoulder Press”,
+“preset_id”: 1,
+“isUnilateral”: false,
+“sets”: [
+{ “reps”: 10, “weight”: 20, “rest”: 90, “mode”: 1, “unit”: “reps” },
+{ “reps”: 10, “weight”: 22.5, “rest”: 90, “mode”: 1, “unit”: “reps” },
+{ “reps”: 8, “weight”: 25, “rest”: 120, “mode”: 1, “unit”: “reps” }
+]
+},
+{
+“groupId”: 480,
+“title”: “Standing Barbell Upright Row”,
+“preset_id”: 1,
+“isUnilateral”: false,
+“sets”: [
+{ “reps”: 12, “weight”: 20, “rest”: 60, “mode”: 1, “unit”: “reps” },
+{ “reps”: 12, “weight”: 22.5, “rest”: 60, “mode”: 1, “unit”: “reps” },
+{ “reps”: 10, “weight”: 25, “rest”: 75, “mode”: 1, “unit”: “reps” }
+]
+},
+{
+“groupId”: 294,
+“title”: “Standing Barbell Biceps Curl”,
+“preset_id”: 1,
+“isUnilateral”: false,
+“sets”: [
+{ “reps”: 12, “weight”: 15, “rest”: 60, “mode”: 1, “unit”: “reps” },
+{ “reps”: 10, “weight”: 17.5, “rest”: 60, “mode”: 1, “unit”: “reps” },
+{ “reps”: 8, “weight”: 20, “rest”: 75, “mode”: 1, “unit”: “reps” }
+]
+},
+{
+“groupId”: 91,
+“title”: “Standing Barbell Overhead Triceps Extension”,
+“preset_id”: 1,
+“isUnilateral”: false,
+“sets”: [
+{ “reps”: 12, “weight”: 15, “rest”: 60, “mode”: 1, “unit”: “reps” },
+{ “reps”: 10, “weight”: 17.5, “rest”: 60, “mode”: 1, “unit”: “reps” },
+{ “reps”: 10, “weight”: 20, “rest”: 75, “mode”: 1, “unit”: “reps” }
+]
+}
+]
+}

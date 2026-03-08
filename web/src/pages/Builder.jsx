@@ -16,6 +16,7 @@ import {
   deleteExerciseFromCircuit,
 } from '../lib/circuits.js'
 import { applyPresetToSets } from '../lib/presets.js'
+import { condenseBuilderWorkout } from '../lib/export.js'
 
 const DETAIL_FETCH_LIMIT = 75
 
@@ -192,6 +193,7 @@ function Builder() {
   // Modal state
   const [showImport, setShowImport] = useState(false)
   const [showDebug, setShowDebug] = useState(false)
+  const [exportMode, setExportMode] = useState('condensed')
   const [showPrompt, setShowPrompt] = useState(false)
   const [importJson, setImportJson] = useState('')
   const [promptText, setPromptText] = useState(DEFAULT_PROMPT_TEMPLATE)
@@ -796,6 +798,13 @@ function Builder() {
     )
   }, [workoutName, exercises])
 
+  const exportCondensed = useMemo(
+    () => JSON.stringify(condenseBuilderWorkout(workoutName, exercises), null, 2),
+    [workoutName, exercises]
+  )
+
+  const activeExport = exportMode === 'condensed' ? exportCondensed : exportJson
+
   const showDeviceFilters = config.device_type === 2 && config.allow_monster_moves
 
   return (
@@ -1119,8 +1128,29 @@ function Builder() {
       {showDebug ? (
         <div className="builder-modal">
           <div className="builder-modal-card builder-modal-wide">
-            <h3>Workout JSON</h3>
-            <textarea readOnly value={exportJson} />
+            <h3>Export Workout JSON</h3>
+            <div className="builder-export-toggle">
+              <button
+                type="button"
+                className={`btn btn-sm ${exportMode === 'condensed' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setExportMode('condensed')}
+              >
+                Condensed
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${exportMode === 'full' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setExportMode('full')}
+              >
+                Full
+              </button>
+            </div>
+            <div className="builder-muted">
+              {exportMode === 'condensed'
+                ? 'Human-readable format — great for sharing with an LLM coach.'
+                : 'Full format — use this to re-import into the Builder.'}
+            </div>
+            <textarea readOnly value={activeExport} />
             <div className="builder-modal-actions">
               <button className="btn btn-ghost" type="button" onClick={() => setShowDebug(false)}>
                 Close
@@ -1128,9 +1158,7 @@ function Builder() {
               <button
                 className="btn btn-outline"
                 type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(exportJson)
-                }}
+                onClick={() => navigator.clipboard.writeText(activeExport)}
               >
                 Copy JSON
               </button>

@@ -8,6 +8,7 @@ import {
   scheduleWorkout,
 } from "../lib/workouts.js";
 import { useAuth } from "../state/AuthContext.jsx";
+import { condenseApiWorkout } from "../lib/export.js";
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -90,6 +91,13 @@ function Dashboard() {
   });
   const [exportData, setExportData] = useState(null);
   const [showExport, setShowExport] = useState(false);
+  const [exportMode, setExportMode] = useState("condensed");
+
+  const activeExportData = useMemo(() => {
+    if (!exportData) return null;
+    if (exportMode === "condensed") return exportData.map(condenseApiWorkout);
+    return exportData;
+  }, [exportData, exportMode]);
 
   useEffect(() => {
     let isMounted = true;
@@ -325,9 +333,9 @@ function Dashboard() {
   };
 
   const handleCopyExport = async () => {
-    if (!exportData) return;
+    if (!activeExportData) return;
     try {
-      await navigator.clipboard.writeText(JSON.stringify(exportData, null, 2));
+      await navigator.clipboard.writeText(JSON.stringify(activeExportData, null, 2));
       setExportStatus({ type: "success", message: "Copied to clipboard!" });
     } catch (err) {
       setExportStatus({
@@ -338,14 +346,15 @@ function Dashboard() {
   };
 
   const handleDownloadExport = () => {
-    if (!exportData) return;
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+    if (!activeExportData) return;
+    const blob = new Blob([JSON.stringify(activeExportData, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `speediance-workouts-${new Date().toISOString().split("T")[0]}.json`;
+    const suffix = exportMode === "condensed" ? "-condensed" : "";
+    link.download = `speediance-workouts${suffix}-${new Date().toISOString().split("T")[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -428,6 +437,22 @@ function Dashboard() {
                 {exportStatus.message}
               </div>
               <div className="export-actions">
+                <div className="export-mode-toggle">
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${exportMode === "condensed" ? "btn-primary" : "btn-ghost"}`}
+                    onClick={() => setExportMode("condensed")}
+                  >
+                    Condensed
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${exportMode === "full" ? "btn-primary" : "btn-ghost"}`}
+                    onClick={() => setExportMode("full")}
+                  >
+                    Full
+                  </button>
+                </div>
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -443,10 +468,15 @@ function Dashboard() {
                   Download JSON
                 </button>
               </div>
+              <div className="builder-muted">
+                {exportMode === "condensed"
+                  ? "Human-readable format — great for sharing with an LLM coach."
+                  : "Full raw API data — use this for archival or debugging."}
+              </div>
               <textarea
                 className="export-json"
                 readOnly
-                value={JSON.stringify(exportData, null, 2)}
+                value={JSON.stringify(activeExportData, null, 2)}
                 rows={20}
               />
             </>
