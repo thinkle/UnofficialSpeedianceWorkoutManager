@@ -6,6 +6,8 @@ import { useAuth } from "../state/AuthContext.jsx";
 import ExerciseCard from "../components/ExerciseCard.jsx";
 import CircuitBlock from "../components/CircuitBlock.jsx";
 import EquipmentFilter from "../components/EquipmentFilter.jsx";
+import ExerciseDetailModal from "../components/ExerciseDetailModal.jsx";
+import WorkoutPicker from "../components/WorkoutPicker.jsx";
 import {
   matchesEquipmentFilter,
   EQUIPMENT_GROUPS,
@@ -216,6 +218,10 @@ function Builder() {
   const [importJson, setImportJson] = useState("");
   const [promptText, setPromptText] = useState(DEFAULT_PROMPT_TEMPLATE);
 
+  // Tab + exercise preview state
+  const [activeTab, setActiveTab] = useState("workouts");
+  const [previewIndex, setPreviewIndex] = useState(null);
+
   const isEditMode = Boolean(workoutCode);
 
   // Parse exercises into blocks (circuits + singles)
@@ -287,6 +293,7 @@ function Builder() {
         setWorkoutId(normalized.id);
         setWorkoutName(normalized.name);
         setExercises(normalized.exercises);
+        setActiveTab("organize");
       }
       setStatus({ type: "success", message: "" });
     };
@@ -860,88 +867,113 @@ function Builder() {
   const showDeviceFilters =
     config.device_type === 2 && config.allow_monster_moves;
 
+  const handleNewWorkout = useCallback(() => {
+    setWorkoutId(null);
+    setWorkoutName("");
+    setExercises([]);
+    setSelectedExercises(new Set());
+    setSaveError("");
+    setActiveTab("add");
+    if (workoutCode) {
+      navigate("/create", { replace: true });
+    }
+  }, [workoutCode, navigate]);
+
   return (
     <div className="page builder-page">
-      <section className="builder-shell">
-        <aside className="builder-panel builder-panel-left">
-          <div className="builder-panel-header">
-            <h2 className="section-title">Library</h2>
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search..."
-              className="builder-input"
-              disabled={!isAuthenticated}
-            />
-          </div>
+      <div className="builder-tabs">
+        <button
+          type="button"
+          className={`builder-tab${activeTab === "workouts" ? " builder-tab-active" : ""}`}
+          onClick={() => setActiveTab("workouts")}
+        >
+          My Workouts
+        </button>
+        <button
+          type="button"
+          className={`builder-tab${activeTab === "add" ? " builder-tab-active" : ""}`}
+          onClick={() => setActiveTab("add")}
+        >
+          Add Exercises
+        </button>
+        <button
+          type="button"
+          className={`builder-tab${activeTab === "organize" ? " builder-tab-active" : ""}`}
+          onClick={() => setActiveTab("organize")}
+        >
+          Organize{exercises.length > 0 ? ` (${exercises.length})` : ""}
+        </button>
+      </div>
 
-          <div className="builder-panel-scroll">
-            <details className="builder-details">
-              <summary>Filters</summary>
-              <div className="builder-details-body">
-                <div className="builder-subdetails">
-                  <div className="builder-subdetails-title">Category</div>
-                  <select
-                    className="builder-select builder-select-wide"
-                    value={categoryId}
-                    onChange={(event) => setCategoryId(event.target.value)}
-                    disabled={!isAuthenticated}
-                  >
-                    <option value="all">All Categories</option>
-                    {(library.categories || []).map((category) => (
-                      <option
-                        key={category.id}
-                        value={category.filter_ids || category.id}
-                      >
-                        {category.displayName || category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+      {activeTab === "workouts" ? (
+        <div className="builder-tab-content">
+          <WorkoutPicker onNewWorkout={handleNewWorkout} />
+        </div>
+      ) : null}
 
-                <div className="builder-subdetails">
-                  <div className="builder-subdetails-title">
-                    <span>
-                      Equipment
-                      {Object.values(equipmentFilter).some(
-                        (s) => s.size > 0,
-                      ) && (
-                        <span className="equipment-filter-badge">
-                          {Object.values(equipmentFilter).reduce(
-                            (n, s) => n + s.size,
-                            0,
-                          )}
-                        </span>
-                      )}
-                    </span>
+      {activeTab === "add" ? (
+        <section className="builder-shell">
+          <aside className="builder-panel builder-panel-left">
+            <div className="builder-panel-header">
+              <h2 className="section-title">Filters</h2>
+            </div>
+            <div className="builder-panel-scroll">
+              <div className="builder-subdetails">
+                <div className="builder-subdetails-title">Category</div>
+                <select
+                  className="builder-select builder-select-wide"
+                  value={categoryId}
+                  onChange={(event) => setCategoryId(event.target.value)}
+                  disabled={!isAuthenticated}
+                >
+                  <option value="all">All Categories</option>
+                  {(library.categories || []).map((category) => (
+                    <option
+                      key={category.id}
+                      value={category.filter_ids || category.id}
+                    >
+                      {category.displayName || category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="builder-subdetails">
+                <div className="builder-subdetails-title">
+                  <span>
+                    Equipment
                     {Object.values(equipmentFilter).some((s) => s.size > 0) && (
-                      <button
-                        type="button"
-                        className="equipment-filter-clear"
-                        onClick={() => setEquipmentFilter({})}
-                        disabled={!isAuthenticated}
-                      >
-                        Clear
-                      </button>
+                      <span className="equipment-filter-badge">
+                        {Object.values(equipmentFilter).reduce((n, s) => n + s.size, 0)}
+                      </span>
                     )}
-                  </div>
-                  <EquipmentFilter
-                    selectedFilters={equipmentFilter}
-                    onChange={setEquipmentFilter}
-                    disabled={!isAuthenticated}
-                  />
+                  </span>
+                  {Object.values(equipmentFilter).some((s) => s.size > 0) && (
+                    <button
+                      type="button"
+                      className="equipment-filter-clear"
+                      onClick={() => setEquipmentFilter({})}
+                      disabled={!isAuthenticated}
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
+                <EquipmentFilter
+                  selectedFilters={equipmentFilter}
+                  onChange={setEquipmentFilter}
+                  disabled={!isAuthenticated}
+                />
+              </div>
 
-                <div className="builder-subdetails">
-                  <div className="builder-subdetails-title">Advanced</div>
+              <details className="builder-details">
+                <summary>Advanced filters</summary>
+                <div className="builder-details-body">
                   <label className="builder-checkbox">
                     <input
                       type="checkbox"
                       checked={detailEnabled}
-                      onChange={(event) =>
-                        setDetailEnabled(event.target.checked)
-                      }
+                      onChange={(event) => setDetailEnabled(event.target.checked)}
                     />
                     Enable detailed filtering
                   </label>
@@ -955,7 +987,7 @@ function Builder() {
                       onChange={(event) => setFuzzyCable(event.target.checked)}
                       disabled={!detailEnabled}
                     />
-                    Fuzzy cable height (plus/minus 1)
+                    Fuzzy cable height (±1)
                   </label>
                   <div className="builder-two-col">
                     <select
@@ -967,7 +999,7 @@ function Builder() {
                       <option value="all">Cable height: Any</option>
                       {detailOptions.cables.map((value) => (
                         <option key={value} value={value}>
-                          Cable height: {formatCablePosition(value)}
+                          {formatCablePosition(value)}
                         </option>
                       ))}
                     </select>
@@ -980,16 +1012,13 @@ function Builder() {
                       <option value="all">Bench angle: Any</option>
                       {detailOptions.benches.map((value) => (
                         <option key={value} value={value}>
-                          Bench angle:{" "}
-                          {value === "unknown" ? "Unknown" : `${value} deg`}
+                          {value === "unknown" ? "Unknown" : `${value}°`}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div className="builder-muted">
-                    {detailLoading
-                      ? "Loading detail filters..."
-                      : "Detail filters auto-load when base filters are active."}
+                    {detailLoading ? "Loading..." : "Detail filters load when results are under 75."}
                   </div>
                   {showDeviceFilters ? (
                     <div className="builder-device-row">
@@ -1010,53 +1039,75 @@ function Builder() {
                     </div>
                   ) : null}
                 </div>
-              </div>
-            </details>
+              </details>
+            </div>
+          </aside>
 
-            {status.type === "loading" ? (
-              <div className="notice notice-loading">{status.message}</div>
-            ) : null}
-            {status.type === "error" ? (
-              <div className="notice notice-error">{status.message}</div>
-            ) : null}
-
-            <div className="builder-list">
-              {filteredExercises.map((exercise) => (
-                <div key={exercise.id} className="builder-item">
-                  {exercise.img ? (
-                    <img
-                      src={exercise.img}
-                      alt=""
-                      className="builder-item-img"
-                    />
-                  ) : null}
-                  <div className="builder-item-info">
-                    <div className="builder-item-title">
-                      {exercise.title || "Untitled"}
+          <section className="builder-panel builder-panel-add">
+            <div className="builder-panel-header">
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search exercises..."
+                className="builder-input"
+                disabled={!isAuthenticated}
+              />
+              <span className="builder-muted">{filteredExercises.length} exercises</span>
+            </div>
+            <div className="builder-panel-scroll">
+              {status.type === "loading" ? (
+                <div className="notice notice-loading">{status.message}</div>
+              ) : null}
+              {status.type === "error" ? (
+                <div className="notice notice-error">{status.message}</div>
+              ) : null}
+              <div className="builder-exercise-grid">
+                {filteredExercises.map((exercise, index) => (
+                  <div key={exercise.id} className="builder-grid-card">
+                    {exercise.img ? (
+                      <img src={exercise.img} alt="" className="builder-grid-img" />
+                    ) : (
+                      <div className="builder-grid-no-img" />
+                    )}
+                    <div className="builder-grid-info">
+                      <div className="builder-item-title">{exercise.title || "Untitled"}</div>
+                      <div className="builder-item-meta">
+                        {exercise.mainMuscleGroupName || exercise.category_name || ""}
+                        {exercise.equipment_name ? ` · ${exercise.equipment_name}` : ""}
+                      </div>
                     </div>
-                    <div className="builder-item-meta">
-                      {exercise.category_name || "Category"}
-                      {exercise.mainMuscleGroupName
-                        ? ` - ${exercise.mainMuscleGroupName}`
-                        : ""}
+                    <div className="builder-grid-actions">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs"
+                        onClick={() => setPreviewIndex(index)}
+                      >
+                        Details
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-xs"
+                        onClick={() => {
+                          addExercise(exercise);
+                          setActiveTab("organize");
+                        }}
+                      >
+                        + Add
+                      </button>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-ghost builder-item-action"
-                    onClick={() => addExercise(exercise)}
-                  >
-                    Add
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        </aside>
+          </section>
+        </section>
+      ) : null}
 
-        <section className="builder-panel builder-panel-right">
+      {activeTab === "organize" ? (
+        <section className="builder-panel builder-organize-panel">
           <details className="builder-advanced">
-            <summary>More Features (AI and Import/Export)</summary>
+            <summary>AI &amp; Import/Export</summary>
             <div className="builder-advanced-body">
               <div className="builder-advanced-info">
                 <h4>How to create workouts with AI:</h4>
@@ -1066,30 +1117,15 @@ function Builder() {
                   <li>Copy the JSON output.</li>
                   <li>Import JSON to build instantly.</li>
                 </ol>
-                <p className="builder-muted">
-                  Export JSON to share the current plan or ask for adjustments.
-                </p>
               </div>
               <div className="builder-advanced-actions">
-                <button
-                  className="btn btn-outline"
-                  type="button"
-                  onClick={() => setShowPrompt(true)}
-                >
+                <button className="btn btn-outline" type="button" onClick={() => setShowPrompt(true)}>
                   Generate Prompt
                 </button>
-                <button
-                  className="btn btn-outline"
-                  type="button"
-                  onClick={() => setShowImport(true)}
-                >
+                <button className="btn btn-outline" type="button" onClick={() => setShowImport(true)}>
                   Import JSON
                 </button>
-                <button
-                  className="btn btn-outline"
-                  type="button"
-                  onClick={() => setShowDebug(true)}
-                >
+                <button className="btn btn-outline" type="button" onClick={() => setShowDebug(true)}>
                   Export JSON
                 </button>
               </div>
@@ -1119,7 +1155,7 @@ function Builder() {
                   checked={condensedView}
                   onChange={(e) => setCondensedView(e.target.checked)}
                 />
-                Condensed view
+                Condensed
               </label>
               <button
                 type="button"
@@ -1129,9 +1165,13 @@ function Builder() {
               >
                 Make Circuit ({selectedExercises.size})
               </button>
-              <span className="builder-muted">
-                {exercises.length} exercises
-              </span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setActiveTab("add")}
+              >
+                + Add Exercises
+              </button>
               <button
                 className="btn btn-primary"
                 type="button"
@@ -1143,14 +1183,19 @@ function Builder() {
             </div>
           </div>
 
-          {saveError ? (
-            <div className="notice notice-error">{saveError}</div>
-          ) : null}
+          {saveError ? <div className="notice notice-error">{saveError}</div> : null}
 
           <div className="builder-canvas">
             {exercises.length === 0 ? (
               <div className="builder-empty">
-                Select exercises from the library to build a plan.
+                <p>No exercises yet.</p>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setActiveTab("add")}
+                >
+                  Browse exercises →
+                </button>
               </div>
             ) : (
               <div className="builder-blocks">
@@ -1174,10 +1219,7 @@ function Builder() {
                       />
                     );
                   }
-
-                  // Single exercise
                   const exercise = block.exercise;
-
                   return (
                     <ExerciseCard
                       key={exercise.id}
@@ -1200,7 +1242,24 @@ function Builder() {
             )}
           </div>
         </section>
-      </section>
+      ) : null}
+
+      {previewIndex !== null ? (
+        <ExerciseDetailModal
+          exercises={filteredExercises}
+          currentIndex={previewIndex}
+          onClose={() => setPreviewIndex(null)}
+          onAdd={(exercise) => {
+            addExercise(exercise);
+            setActiveTab("organize");
+          }}
+          onNavigate={(newIndex) => {
+            if (newIndex >= 0 && newIndex < filteredExercises.length) {
+              setPreviewIndex(newIndex);
+            }
+          }}
+        />
+      ) : null}
 
       {showImport ? (
         <div className="builder-modal">

@@ -295,9 +295,27 @@ export async function fetchExerciseDetail(config, exerciseId) {
     return { ok: false, error: response.error || 'Unable to load exercise.' }
   }
 
-  debugLog('Loaded exercise detail', { exerciseId })
-  saveCache(cacheKey, response.data)
-  return { ok: true, data: response.data, source: 'network' }
+  const raw = response.data
+  const enriched = { ...raw }
+
+  if (!enriched.category_name && enriched.tabName) {
+    enriched.category_name = enriched.tabName
+  }
+
+  if (!enriched.equipment_name) {
+    const accIds = String(enriched.accessories || '').split(',').filter(Boolean)
+    if (accIds.length > 0) {
+      const accessoryMap = await fetchAccessoryMap(config)
+      const accNames = accIds.map((id) => accessoryMap[id]).filter(Boolean)
+      enriched.equipment_name = accNames.length > 0 ? accNames.join(', ') : 'Standard'
+    } else {
+      enriched.equipment_name = 'Standard'
+    }
+  }
+
+  debugLog('Loaded exercise detail', { exerciseId, equipment_name: enriched.equipment_name, category_name: enriched.category_name })
+  saveCache(cacheKey, enriched)
+  return { ok: true, data: enriched, source: 'network' }
 }
 
 export async function fetchExerciseDetailsBatch(config, ids) {

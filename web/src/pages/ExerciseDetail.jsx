@@ -3,6 +3,28 @@ import { NavLink, useParams } from 'react-router-dom'
 import { fetchExerciseDetail } from '../lib/library.js'
 import { useAuth } from '../state/AuthContext.jsx'
 
+function parseShowDetails(raw) {
+  if (!raw) return []
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function ContextSteps({ text }) {
+  if (!text) return null
+  const steps = text.split('\n').filter(Boolean)
+  return (
+    <ol className="context-steps">
+      {steps.map((step, i) => (
+        <li key={i}>{step.replace(/^\d+\./, '').trim()}</li>
+      ))}
+    </ol>
+  )
+}
+
 function ExerciseDetail() {
   const { exerciseId } = useParams()
   const { config, isAuthenticated } = useAuth()
@@ -45,15 +67,15 @@ function ExerciseDetail() {
     }
   }, [config, isAuthenticated, exerciseId])
 
+  const showDetails = parseShowDetails(detail?.showDetails)
+
   return (
     <div className="page">
       <section className="page-header">
         <div>
           <p className="eyebrow">Exercise</p>
           <h1 className="page-title">{displayTitle || 'Exercise detail'}</h1>
-          <p className="page-subtitle">
-            ID: {exerciseId || '--'} - Media and cues will load here.
-          </p>
+          <p className="page-subtitle">ID: {exerciseId || '--'}</p>
         </div>
         <NavLink className="btn btn-outline" to="/library">
           Back to library
@@ -73,9 +95,9 @@ function ExerciseDetail() {
       <section className="grid-2">
         <div className="card media-preview">
           {detail?.img ? (
-            <img src={detail.img} alt={detail.title || 'Exercise'} />
+            <img src={detail.img} alt={displayTitle || 'Exercise'} />
           ) : (
-            <div className="media-placeholder">Video preview</div>
+            <div className="media-placeholder">No image available</div>
           )}
         </div>
         <div className="card">
@@ -97,12 +119,60 @@ function ExerciseDetail() {
             <div className="highlight">
               <div className="highlight-title">Category</div>
               <div className="highlight-copy">
-                {detail?.category_name_en || detail?.category_name || detail?.categoryName || 'Not available yet.'}
+                {detail?.category_name_en || detail?.category_name || detail?.categoryName || detail?.tabName || 'Not available yet.'}
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      {detail?.context ? (
+        <section className="card">
+          <h2 className="section-title">Instructions</h2>
+          <ContextSteps text={detail.context} />
+        </section>
+      ) : null}
+
+      {(detail?.breathingRate || detail?.motionFeeling || detail?.errorCorrection) ? (
+        <section className="grid-3">
+          {detail?.breathingRate ? (
+            <div className="card">
+              <div className="highlight-title">Breathing</div>
+              <p>{detail.breathingRate}</p>
+            </div>
+          ) : null}
+          {detail?.motionFeeling ? (
+            <div className="card">
+              <div className="highlight-title">What to feel</div>
+              <p>{detail.motionFeeling}</p>
+            </div>
+          ) : null}
+          {detail?.errorCorrection ? (
+            <div className="card">
+              <div className="highlight-title">Common errors</div>
+              <p>{detail.errorCorrection}</p>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {showDetails.length > 0 ? (
+        <section className="card">
+          <h2 className="section-title">Step by step</h2>
+          <div className="grid-3">
+            {showDetails.map((step, i) => (
+              <div key={i} className="step-card">
+                {step.img ? (
+                  <img src={step.img} alt={`Step ${i + 1}`} />
+                ) : null}
+                {step.context ? (
+                  <p className="step-caption">{step.context.replace(/^\d+\./, '').trim()}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   )
 }

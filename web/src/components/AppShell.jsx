@@ -2,10 +2,9 @@ import { NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext.jsx";
 
 const navItems = [
-  { to: "/", label: "Workouts", end: true },
-  { to: "/library", label: "Library" },
+  { to: "/", label: "Schedule", end: true },
+  { to: "/create", label: "Build" },
   { to: "/history", label: "History" },
-  { to: "/create", label: "Builder" },
   { to: "/settings", label: "Settings" },
 ];
 
